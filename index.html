@@ -3,12 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0D0D14">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Pathway">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-180.png">
 <title>Pathway Analyzer</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -307,7 +301,7 @@ input[type="checkbox"]{accent-color:#4A7FBF}
 <body>
 <div class="topbar">
   <div class="topbar-brand">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L20 5.5V12C20 16.7 16.4 20 12 22C7.6 20 4 16.7 4 12V5.5Z"/><path d="M12 3.5L19 6.5V12C19 16 15.8 19 12 21C8.2 19 5 16 5 12V6.5Z" stroke-width="0.8"/><circle cx="12" cy="11.5" r="2" stroke="#6EA4E8" stroke-width="1"/><circle cx="12" cy="11.5" r="0.8" fill="#4ADE80" stroke="none"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
     PATHWAY ANALYZER
   </div>
   <div class="topbar-nav">
@@ -316,8 +310,8 @@ input[type="checkbox"]{accent-color:#4A7FBF}
 </div>
 <div id="app"></div>
 <div class="footer">
-  <div class="footer-left"><span class="footer-dot"></span> Engine v13m</div>
-  <div class="footer-right">DZC Art. 11 · COS UDC Ch. 7 · Source authority only</div>
+  <div class="footer-left"><span class="footer-dot"></span> Engine v14</div>
+  <div class="footer-right">DZC Art. 11 · COS UDC Ch. 7 · EPC LDC Ch. 5 · Source authority only</div>
 </div>
 <script>
 const APP=document.getElementById("app");
@@ -348,21 +342,6 @@ function gisNormalize(raw){
   return parts.join(" ");
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   FETCH WRAPPER — timeout + retry for mobile reliability
-   ═══════════════════════════════════════════════════════════════════ */
-function fetchWithTimeout(url,ms=15000){
-  const ctrl=new AbortController();
-  const timer=setTimeout(()=>ctrl.abort(),ms);
-  return fetch(url,{signal:ctrl.signal,mode:"cors"}).then(r=>{clearTimeout(timer);return r}).catch(e=>{clearTimeout(timer);throw e});
-}
-async function fetchRetry(url,retries=2,ms=15000){
-  for(let i=0;i<=retries;i++){
-    try{return await fetchWithTimeout(url,ms)}
-    catch(e){if(i===retries)throw new Error(`${e.name==="AbortError"?"Request timed out after "+(ms/1000)+"s":e.message} (attempt ${i+1}/${retries+1})`)}
-  }
-}
-
 async function gisFindAddresses(raw){
   const norm=gisNormalize(raw);
   const queries=[`FULL_ADDRESS='${norm}'`,`FULL_ADDRESS LIKE '${norm}%'`];
@@ -370,7 +349,7 @@ async function gisFindAddresses(raw){
   if(m){const num=m[1];const street=m[2].replace(/^[NSEW]\s+/,"");queries.push(`ADDRESS_NUMBER=${num} AND STREET_NAME LIKE '${street}%'`)}
   for(const where of queries){
     const url=`${ADDR_LAYER}?where=${encodeURIComponent(where)}&outFields=FULL_ADDRESS,LATITUDE,LONGITUDE&returnGeometry=false&resultRecordCount=10&f=json`;
-    const res=await fetchRetry(url);const data=await res.json();
+    const res=await fetch(url);const data=await res.json();
     const feats=(data.features||[]).map(f=>f.attributes);
     if(feats.length>0){
       if(feats.length===1)return feats;
@@ -385,9 +364,9 @@ async function gisFindAddresses(raw){
 async function gisQueryLayers(lat,lon){
   const geom=`${lon}%2C${lat}`;
   const[parcelRes,zoningRes,rcRes]=await Promise.all([
-    fetchRetry(`${PARCEL_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=SITUS_ADDRESS_LINE1,LAND_AREA,ZONE_10,ZONE_ID,D_CLASS_CN,PROP_CLASS,OWNER_NAME,APPRAISED_TOTAL_VALUE,LEGAL_DESC,Shape__Area,SALE_DATE,SALE_PRICE,RES_ORIG_YEAR_BUILT,COM_ORIG_YEAR_BUILT,TOT_UNITS&returnGeometry=false&f=json`),
-    fetchRetry(`${ZONING_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=ZONE_DISTRICT,ZONE_DESCRIPTION,ZONE_USE_FORM,NBHD_CONTEXT,ZONE_DIST_TYPE&returnGeometry=false&f=json`),
-    fetchRetry(`${RC_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=FACILITY_NAME,FACILITY_ADDRESS,RES_CARE_TYPE&returnGeometry=true&outSR=4326&f=json`)
+    fetch(`${PARCEL_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=SITUS_ADDRESS_LINE1,LAND_AREA,ZONE_10,ZONE_ID,D_CLASS_CN,PROP_CLASS,OWNER_NAME,APPRAISED_TOTAL_VALUE,LEGAL_DESC,Shape__Area,SALE_DATE,SALE_PRICE,RES_ORIG_YEAR_BUILT,COM_ORIG_YEAR_BUILT,TOT_UNITS&returnGeometry=false&f=json`),
+    fetch(`${ZONING_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=ZONE_DISTRICT,ZONE_DESCRIPTION,ZONE_USE_FORM,NBHD_CONTEXT,ZONE_DIST_TYPE&returnGeometry=false&f=json`),
+    fetch(`${RC_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=FACILITY_NAME,FACILITY_ADDRESS,RES_CARE_TYPE&returnGeometry=true&outSR=4326&f=json`)
   ]);
   const parcelData=await parcelRes.json();const zoningData=await zoningRes.json();const rcData=await rcRes.json();
   let parcel=null;const parcelCount=parcelData.features?.length||0;
@@ -433,7 +412,7 @@ async function cosFindAddresses(raw){
   if(m){queries.push(`Add_Number=${m[1]} AND FullAddress LIKE '%${m[3]}%'`)}
   for(const where of queries){
     const url=`${COS_ADDR}?where=${encodeURIComponent(where)}&outFields=FullAddress,Add_Number&returnGeometry=true&outSR=4326&resultRecordCount=10&f=json`;
-    const res=await fetchRetry(url);const data=await res.json();
+    const res=await fetch(url);const data=await res.json();
     const feats=(data.features||[]).map(f=>({...f.attributes,x:f.geometry.x,y:f.geometry.y}));
     if(feats.length>0){
       const bases=new Map();
@@ -448,15 +427,15 @@ async function cosQueryLayers(lat,lon){
   const geom=`${lon},${lat}`;
   const gP=`geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&f=json`;
   const coreFetches=[
-    fetchRetry(`${COS_PARCEL}?${gP}&outFields=PARCEL,ZONING,MAINADDRES,OwnerName,ACREAGE,LEGAL,Shape_Area,CITY,type`).then(r=>r.json()),
-    fetchRetry(`${COS_ZONING}?${gP}&outFields=LABEL,DESCRIPT,ECP_Zoning_Code,ECP_Zone_Description`).then(r=>r.json()),
+    fetch(`${COS_PARCEL}?${gP}&outFields=PARCEL,ZONING,MAINADDRES,OwnerName,ACREAGE,LEGAL,Shape_Area,CITY,type`).then(r=>r.json()),
+    fetch(`${COS_ZONING}?${gP}&outFields=LABEL,DESCRIPT,ECP_Zoning_Code,ECP_Zone_Description`).then(r=>r.json()),
   ];
   const overlayFetches=Object.entries(COS_OVERLAYS).map(([key,layer])=>
-    fetchRetry(`${layer.url}?${gP}&outFields=${layer.fields}`).then(r=>r.json()).then(d=>({key,features:d.features||[]})).catch(()=>({key,features:[]}))
+    fetch(`${layer.url}?${gP}&outFields=${layer.fields}`).then(r=>r.json()).then(d=>({key,features:d.features||[]})).catch(()=>({key,features:[]}))
   );
-  const cdpheFetch=fetchRetry(`${COS_CDPHE}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=Facility_Name,Facility_Type,Facility_Type_Detail,Address_Full,Licensed_Beds_Total,Operating_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&resultRecordCount=200&f=json`).then(r=>r.json()).catch(()=>({features:[]}));
-  const cupFetch=fetchRetry(`${COS_CUP}?${gP}&outFields=FILE_NUM`).then(r=>r.json()).catch(()=>({features:[]}));
-  const uvFetch=fetchRetry(`${COS_USEVAR}?${gP}&outFields=FILE_NUM`).then(r=>r.json()).catch(()=>({features:[]}));
+  const cdpheFetch=fetch(`${COS_CDPHE}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=Facility_Name,Facility_Type,Facility_Type_Detail,Address_Full,Licensed_Beds_Total,Operating_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&resultRecordCount=200&f=json`).then(r=>r.json()).catch(()=>({features:[]}));
+  const cupFetch=fetch(`${COS_CUP}?${gP}&outFields=FILE_NUM`).then(r=>r.json()).catch(()=>({features:[]}));
+  const uvFetch=fetch(`${COS_USEVAR}?${gP}&outFields=FILE_NUM`).then(r=>r.json()).catch(()=>({features:[]}));
   const[parcelRes,zoningRes,...rest]=await Promise.all([...coreFetches,...overlayFetches,cdpheFetch,cupFetch,uvFetch]);
   const oLen=Object.keys(COS_OVERLAYS).length;
   const overlayResults=rest.slice(0,oLen);
@@ -598,14 +577,85 @@ const ASSR="https://property.spatialest.com/co/denver";
 const COS_ZMAP="https://coloradosprings.gov/planning/zoning-maps";
 
 /* ═══════════════════════════════════════════════════════════════════
+   EL PASO COUNTY — ZONE LIST + USE TABLE (LDC Table 5-1)
+   Source: epc_ruleset_v0_3.md § 2B (validated, zero mismatches)
+   ═══════════════════════════════════════════════════════════════════ */
+const EPC_ZL=["F-5","A-35","A-5","RR-5","RR-2.5","RR-0.5","RS-20000","RS-6000","RS-5000","RM-12","RM-30","R-T","MHP","MHS","MHP-R","RVP","CC","CR","CS","I-2","I-3","C-1","C-2","M","R-4","PUD"];
+const EPC_ZG={
+  "Forestry/Agriculture":{list:["F-5","A-35","A-5"]},
+  "Rural Residential":{list:["RR-5","RR-2.5","RR-0.5"]},
+  "Residential Suburban":{list:["RS-20000","RS-6000","RS-5000"]},
+  "Residential Multi":{list:["RM-12","RM-30"]},
+  "Special Purpose":{list:["R-T","MHP","MHS","MHP-R","RVP"]},
+  "Commercial":{list:["CC","CR","CS"]},
+  "Industrial":{list:["I-2","I-3"]},
+  "Obsolete":{list:["C-1","C-2","M","R-4"]},
+  "Planned":{list:["PUD"]}
+};
+
+// EPC Use Table: zone -> {gh,rehab,hosp,convHosp,medClinic,halfway,humanSvc,boarding,philanthropic}
+// A=Allowed, A4=Allowed w/ size routing (≤8 A / 9+ S per code text; SP-05: all A), S=Special Use, N=Not permitted
+// Note: "gh" covers ALL group home sub-types (disabled, mental illness, DD, aged);
+//       the engine splits into 8 pathway results based on population type and occupancy band.
+const EPC_UT={};
+function eZ(zones,gh,rehab,hosp,convHosp,medClinic,halfway,humanSvc,boarding,philanthropic){
+  zones.forEach(z=>{EPC_UT[z]={gh,rehab,hosp,convHosp,medClinic,halfway,humanSvc,boarding,philanthropic}});
+}
+// Forestry/Agriculture — all 3 zones identical for most uses
+eZ(["F-5"],       "A4","N","N","S","N","S","N","N","S");
+eZ(["A-35"],      "A4","N","N","S","N","S","N","N","N");
+eZ(["A-5"],       "A4","N","N","S","N","S","N","N","S");
+// Rural Residential
+eZ(["RR-5"],      "A4","N","N","N","N","S","N","N","S");
+eZ(["RR-2.5"],    "A4","N","N","N","N","N","N","N","S");
+eZ(["RR-0.5"],    "A4","N","N","N","N","N","N","N","S");
+// Residential Suburban
+eZ(["RS-20000","RS-6000","RS-5000"],"A4","N","N","N","N","N","N","N","N");
+// Residential Multi
+eZ(["RM-12"],     "A4","S","N","S","N","N","N","A","N");
+eZ(["RM-30"],     "A4","S","S","S","N","N","N","A","N");
+// Special Purpose
+eZ(["R-T"],       "A4","N","N","N","N","N","N","N","N");
+eZ(["MHP","MHS","MHP-R"],"A4","N","N","N","N","N","N","N","N");
+eZ(["RVP"],       "N","N","N","N","N","N","N","N","N");
+// Commercial
+eZ(["CC"],        "N","A","A","S","A","N","S","S","A");
+eZ(["CR"],        "N","A","A","S","A","N","S","S","A");
+eZ(["CS"],        "N","A","S","S","A","N","A","A","A");
+// Industrial
+eZ(["I-2","I-3"], "N","N","N","N","N","N","N","N","N");
+// Obsolete
+eZ(["C-1"],       "N","A","S","S","N","N","S","S","S");
+eZ(["C-2"],       "N","A","S","S","N","N","S","S","S");
+eZ(["M"],         "N","A","A","A","A","N","S","A","A");
+eZ(["R-4"],       "N","N","N","N","N","N","N","N","N");
+// PUD — special handling; engine produces advisory, not Use Table lookup
+eZ(["PUD"],       "N","N","N","N","N","N","N","N","N");
+
+/* ═══════════════════════════════════════════════════════════════════
+   EL PASO COUNTY — ZONE HELPER FUNCTIONS
+   ═══════════════════════════════════════════════════════════════════ */
+// Group home residential zones (the 15 where gh=A4)
+const EPC_GH_ZONES=new Set(["F-5","A-35","A-5","RR-5","RR-2.5","RR-0.5","RS-20000","RS-6000","RS-5000","RM-12","RM-30","R-T","MHP","MHS","MHP-R"]);
+function epcIsGHZone(z){return EPC_GH_ZONES.has(z)}
+// Commercial zones (for separation exception § 5.2.17(A)(2))
+function epcIsCommercial(z){return["CC","CR","CS","C-1","C-2","M"].includes(z)}
+// Zones where GH for Disabled Persons separation is exempt (all GH zones — disabled exempt from § 5.2.17(A))
+// Separation applies ONLY to mental illness, DD, aged sub-types in non-commercial zones
+// Spacing: single category — 500 ft along same road, § 5.2.17(A)
+const EPC_ZMAP="https://epcdev.maps.arcgis.com/apps/webappviewer/index.html?id=7b9d76e1e58c41a1a0f22235e4a42be9";
+
+/* ═══════════════════════════════════════════════════════════════════
    APPLICATION STATE
    ═══════════════════════════════════════════════════════════════════ */
 let ST={
-  jurisdiction:null, // "denver" or "cos"
+  jurisdiction:null, // "denver" | "cos" | "epc"
   pg:0,
   form:{address:null,zone:null,lotSize:null,existingRC:null,maintained:null,religious:null,correctional:null,rcWithin1mi:null,rcType34within1mi:null,distType34:null,op24hr:null,overnight:null,licensing:null,
     // COS-specific fields
-    fhaProtected:null,constructionType:null,fbzPermits:null,pdzPermits:null,targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],distGLRDetox:null,nearestAL:null},
+    fhaProtected:null,constructionType:null,fbzPermits:null,pdzPermits:null,targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],distGLRDetox:null,nearestAL:null,
+    // EPC-specific fields (site facts — engine does classification)
+    epcSexOffender:null,epcNonprofit:null,epcSeparation:null,epcCadO:null},
   results:null,activeTab:"dashboard",expanded:{},
   gisPhase:"idle",gisError:null,gisAddresses:null,gisData:null,gisAutoZone:null,gisAutoLot:null,gisAutoRC:null,gisAutoRC34:null,gisAutoDist34:null,gisOverrides:{},
   // COS GIS extras
@@ -613,7 +663,7 @@ let ST={
 };
 
 function resetState(keepJurisdiction){
-  ST={jurisdiction:keepJurisdiction?ST.jurisdiction:null,pg:0,form:{address:null,zone:null,lotSize:null,existingRC:null,maintained:null,religious:null,correctional:null,rcWithin1mi:null,rcType34within1mi:null,distType34:null,op24hr:null,overnight:null,licensing:null,fhaProtected:null,constructionType:null,fbzPermits:null,pdzPermits:null,targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],distGLRDetox:null,nearestAL:null},results:null,activeTab:"dashboard",expanded:{},gisPhase:"idle",gisError:null,gisAddresses:null,gisData:null,gisAutoZone:null,gisAutoLot:null,gisAutoRC:null,gisAutoRC34:null,gisAutoDist34:null,gisOverrides:{},cosAutoOverlays:[],cosAutoNNA:null,cosAutoAPZ:null,cosAutoFacilities:[],cosAutoALR:0,cosAutoCUP:[],cosAutoUV:[],cosAutoNearestFacDist:null,cosAutoNearestFacName:null,cosAutoNearestFacIsALR:false};
+  ST={jurisdiction:keepJurisdiction?ST.jurisdiction:null,pg:0,form:{address:null,zone:null,lotSize:null,existingRC:null,maintained:null,religious:null,correctional:null,rcWithin1mi:null,rcType34within1mi:null,distType34:null,op24hr:null,overnight:null,licensing:null,fhaProtected:null,constructionType:null,fbzPermits:null,pdzPermits:null,targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],distGLRDetox:null,nearestAL:null,epcSexOffender:null,epcNonprofit:null,epcSeparation:null,epcCadO:null},results:null,activeTab:"dashboard",expanded:{},gisPhase:"idle",gisError:null,gisAddresses:null,gisData:null,gisAutoZone:null,gisAutoLot:null,gisAutoRC:null,gisAutoRC34:null,gisAutoDist34:null,gisOverrides:{},cosAutoOverlays:[],cosAutoNNA:null,cosAutoAPZ:null,cosAutoFacilities:[],cosAutoALR:0,cosAutoCUP:[],cosAutoUV:[],cosAutoNearestFacDist:null,cosAutoNearestFacName:null,cosAutoNearestFacIsALR:false};
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -622,6 +672,7 @@ function resetState(keepJurisdiction){
 function getPages(){
   if(!ST.jurisdiction)return[{id:"jurisdiction"}];
   if(ST.jurisdiction==="denver")return getDenverPages();
+  if(ST.jurisdiction==="epc")return getEPCPages();
   return getCOSPages();
 }
 
@@ -664,6 +715,29 @@ function getCOSPages(){
   p.push({id:"review"});return p;
 }
 
+function getEPCPages(){
+  const p=[{id:"epcAddress"},{id:"epcZone"}];const z=ST.form.zone;if(!z)return p;
+  if(z==="PUD"){p.push({id:"epcPUD"});return p}
+  const ut=EPC_UT[z];if(!ut)return p;
+  const allN=Object.values(ut).every(v=>v==="N");
+  if(allN){p.push({id:"allNP"});return p}
+  // Site facts — engine tests all 16 pathways against these inputs
+  p.push({id:"licensing"});
+  p.push({id:"correctional"});
+  p.push({id:"epcSexOffender"});
+  p.push({id:"op24hr"});
+  p.push({id:"overnight"});
+  // Nonprofit — gates philanthropic pathway
+  if(ut.philanthropic!=="N"||ut.rehab!=="N")p.push({id:"epcNonprofit"});
+  // Separation — only relevant if GH permitted in this zone AND zone is not commercial
+  if(ut.gh==="A4"&&!epcIsCommercial(z))p.push({id:"epcSeparation"});
+  // CAD-O: auto-determined by GIS overlay query — no intake page needed
+  // Existing use
+  p.push({id:"existingRC"});
+  if(ST.form.existingRC==="yes")p.push({id:"maintained"});
+  p.push({id:"review"});return p;
+}
+
 function advance(){const pages=getPages();if(ST.pg<pages.length-1)ST.pg++;render()}
 function goBack(){if(ST.pg>0){ST.pg--;render()}}
 
@@ -679,21 +753,13 @@ async function gisStartLookup(){
     if(addrs.length===0){ST.gisPhase="error";ST.gisError="No matching address found in Denver\u2019s address point layer. Check spelling or include the directional (N/S/E/W).";render();return}
     if(addrs.length===1){await gisRunWithAddress(addrs[0])}
     else{ST.gisPhase="disambig";ST.gisAddresses=addrs;render()}
-  }catch(err){
-    const msg=err.message||String(err);
-    const isMobileBlock=msg.includes("Load failed")||msg.includes("Failed to fetch")||msg.includes("NetworkError")||msg.includes("timed out");
-    ST.gisPhase="error";
-    ST.gisError=isMobileBlock
-      ?"Network request blocked or timed out. This can happen on mobile browsers opening local files. Try: (1) open this page from a web server instead of a file, or (2) skip the lookup and enter data manually."
-      :"ArcGIS query failed: "+msg+". You can skip the lookup and enter data manually.";
-    render();
-  }
+  }catch(err){ST.gisPhase="error";ST.gisError="ArcGIS query failed: "+(err.message||err)+". You can skip the lookup and enter data manually.";render()}
 }
 
 async function gisSelectAddress(idx){
   ST.gisPhase="querying";render();
   try{await gisRunWithAddress(ST.gisAddresses[idx])}
-  catch(err){ST.gisPhase="error";const msg=err.message||String(err);ST.gisError=(msg.includes("Load failed")||msg.includes("Failed to fetch")||msg.includes("timed out"))?"Network request blocked or timed out on mobile. Skip lookup and enter data manually, or open from a hosted URL.":"Layer query failed: "+msg+". You can skip and enter data manually.";render()}
+  catch(err){ST.gisPhase="error";ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
 }
 
 async function gisRunWithAddress(addr){
@@ -712,7 +778,7 @@ async function gisRunWithAddress(addr){
     if(landArea)ST.form.lotSize=landArea;
     ST.form.rcWithin1mi=totalRC;ST.form.rcType34within1mi=t34c;ST.form.distType34=nearest34?nearest34.ft:null;
     ST.form.address=addr.FULL_ADDRESS;ST.gisPhase="done";render();
-  }catch(err){ST.gisPhase="error";const msg=err.message||String(err);ST.gisError=(msg.includes("Load failed")||msg.includes("Failed to fetch")||msg.includes("timed out"))?"Network request blocked or timed out on mobile. Skip lookup and enter data manually, or open from a hosted URL.":"Layer query failed: "+msg+". You can skip and enter data manually.";render()}
+  }catch(err){ST.gisPhase="error";ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
 }
 
 function gisSkip(){ST.gisPhase="skipped";render()}
@@ -744,7 +810,7 @@ async function cosGisStart(){
 async function cosGisSelect(idx){
   ST.gisPhase="querying";render();
   try{await cosGisRun(ST.gisAddresses[idx])}
-  catch(err){ST.gisPhase="error";const msg=err.message||String(err);ST.gisError=(msg.includes("Load failed")||msg.includes("Failed to fetch")||msg.includes("timed out"))?"Network request blocked or timed out on mobile. Skip lookup and enter data manually, or open from a hosted URL.":"Layer query failed: "+msg+". You can skip and enter data manually.";render()}
+  catch(err){ST.gisPhase="error";ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
 }
 
 async function cosGisRun(addr){
@@ -775,10 +841,122 @@ async function cosGisRun(addr){
     if(nearestRelevant){ST.form.distGLRDetox=nearestRelevant.ft;if(nearestRelevant.type==="Assisted Living Residence")ST.form.nearestAL="yes"}
     ST.form.address=addr.FullAddress;
     ST.gisPhase="done";render();
-  }catch(err){ST.gisPhase="error";const msg=err.message||String(err);ST.gisError=(msg.includes("Load failed")||msg.includes("Failed to fetch")||msg.includes("timed out"))?"Network request blocked or timed out on mobile. Skip lookup and enter data manually, or open from a hosted URL.":"Layer query failed: "+msg+". You can skip and enter data manually.";render()}
+  }catch(err){ST.gisPhase="error";ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
 }
 
 function cosGisApply(){
+  const ov=ST.gisOverrides;
+  if(ov.zone!==undefined)ST.form.zone=ov.zone||null;
+  if(ov.lotSize!==undefined)ST.form.lotSize=ov.lotSize===""?null:Number(ov.lotSize);
+  advance();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   GIS LOOKUP — EL PASO COUNTY
+   Layers: ZoningAreas (MapServer/1), Parcels (MapServer/0),
+           ZoningOverlay (FeatureServer/0)
+   Geocoder: Esri World Geocoding Service (bbox-constrained to EPC)
+   ═══════════════════════════════════════════════════════════════════ */
+const EPC_GIS_ZONING="https://gisservices.elpasoco.com/arcgis2/rest/services/HubPublic/ZoningAreas/MapServer/1/query";
+const EPC_GIS_PARCEL="https://gisservices.elpasoco.com/arcgis2/rest/services/HubPublic/Parcels/MapServer/0/query";
+const EPC_GIS_OVERLAY="https://gisservices.elpasoco.com/arcgis2/rest/services/HubPublic/ZoningOverlay/FeatureServer/0/query";
+const EPC_GEOCODE="https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates";
+// EPC bounding box (lon/lat): roughly -105.05,38.52,-104.04,39.40
+const EPC_BBOX="-105.05,38.52,-104.04,39.40";
+
+async function epcGisStart(){
+  const raw=document.getElementById("epc-addr").value.trim();
+  if(!raw)return;
+  ST.form.address=raw;ST.gisPhase="searching";ST.gisError=null;render();
+  try{
+    // Geocode using Esri World Geocoder, constrained to EPC bbox
+    const q=encodeURIComponent(raw.replace(/,?\s*(el\s*paso\s*county|CO|Colorado|\d{5}(-\d{4})?)[\s,]*/gi," ").trim());
+    const gUrl=`${EPC_GEOCODE}?SingleLine=${q}&searchExtent=${EPC_BBOX}&outFields=Addr_type,Match_addr,StAddr&maxLocations=5&f=json`;
+    const gRes=await fetch(gUrl);const gData=await gRes.json();
+    const candidates=(gData.candidates||[]).filter(c=>c.score>=80);
+    if(candidates.length===0){ST.gisPhase="error";ST.gisError="No matching address found in El Paso County. Try including city name or check spelling.";render();return}
+    if(candidates.length===1){await epcGisRun(candidates[0])}
+    else{
+      // Disambiguate
+      ST.gisPhase="disambig";
+      ST.gisAddresses=candidates.map(c=>({addr:c.attributes.Match_addr,x:c.location.x,y:c.location.y,score:c.score}));
+      render();
+    }
+  }catch(err){ST.gisPhase="error";ST.gisError="Geocoding failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
+}
+
+async function epcGisSelect(idx){
+  ST.gisPhase="querying";render();
+  try{
+    const a=ST.gisAddresses[idx];
+    await epcGisRun({location:{x:a.x,y:a.y},attributes:{Match_addr:a.addr}});
+  }catch(err){ST.gisPhase="error";ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
+}
+
+const EPC_GIS_CITIES="https://gisservices.elpasoco.com/arcgis2/rest/services/HubPublic/IncorporatedCities/FeatureServer/0/query";
+
+async function epcGisRun(candidate){
+  ST.gisPhase="querying";render();
+  const lon=candidate.location.x,lat=candidate.location.y;
+  const geom=`${lon},${lat}`;
+  const gP=`geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&f=json`;
+  try{
+    const[zoningRes,parcelRes,overlayRes,cityRes]=await Promise.all([
+      fetch(`${EPC_GIS_ZONING}?${gP}&outFields=ZONING,ZONETYPE`).then(r=>r.json()),
+      fetch(`${EPC_GIS_PARCEL}?${gP}&outFields=PARCEL,HYPERLINK,Shape.STArea()`).then(r=>r.json()),
+      fetch(`${EPC_GIS_OVERLAY}?${gP}&outFields=ZONEOVERLAY`).then(r=>r.json()),
+      fetch(`${EPC_GIS_CITIES}?${gP}&outFields=NAME`).then(r=>r.json()).catch(()=>({features:[]}))
+    ]);
+    const zoning=zoningRes.features?.length?zoningRes.features[0].attributes:null;
+    // Parcel: pick largest if multiple
+    let parcel=null;const pCount=parcelRes.features?.length||0;
+    if(pCount===1)parcel=parcelRes.features[0].attributes;
+    else if(pCount>1)parcel=parcelRes.features.map(f=>f.attributes).sort((a,b)=>(b["Shape.STArea()"]||0)-(a["Shape.STArea()"]||0))[0];
+    const overlay=overlayRes.features?.length?overlayRes.features[0].attributes:null;
+    const cityName=cityRes.features?.length?cityRes.features[0].attributes.NAME:null;
+
+    const autoZone=zoning?zoning.ZONING:null;
+    const parcelArea=parcel?parcel["Shape.STArea()"]:null;
+    const autoLot=parcelArea?Math.round(parcelArea):null;
+    const autoOverlay=overlay?overlay.ZONEOVERLAY:null;
+    const parcelId=parcel?parcel.PARCEL:null;
+    const assessorLink=parcel?parcel.HYPERLINK:null;
+
+    // Cross-validation: incorporated city check
+    let cityWarning=null;
+    if(cityName&&autoZone){
+      // Both city and zoning returned — flag conflict
+      cityWarning="Zone returned as "+autoZone+", but address is inside "+cityName+". The EPC zoning layer may overlap incorporated boundaries. Verify with PCD whether this property is governed by EPC or "+cityName+" zoning.";
+    } else if(cityName&&!autoZone){
+      // Inside city, no EPC zone — this is expected
+      cityWarning="This address is inside "+cityName+" (incorporated). The El Paso County Land Development Code does not apply. Use "+cityName+"'s zoning code instead.";
+    }
+    // If no city and no zone: unincorporated but zoning data gap
+    // If no city and zone found: clean unincorporated result (no warning needed)
+
+    ST.gisData={matchedAddr:candidate.attributes.Match_addr,lat,lon,autoZone,autoLot,autoOverlay,parcelId,assessorLink,cityName,cityWarning};
+    ST.gisAutoZone=autoZone;
+    ST.gisAutoLot=autoLot;
+    // Auto-populate form
+    if(autoZone&&EPC_ZL.includes(autoZone)&&!cityName)ST.form.zone=autoZone;
+    if(autoLot)ST.form.lotSize=autoLot;
+    ST.form.address=candidate.attributes.Match_addr;
+    // Auto-populate CAD-O from overlay query
+    if(autoOverlay){
+      const ol=autoOverlay.toUpperCase();
+      if(ol.includes("CAD")){
+        ST.form.epcCadO="cado";
+      } else {
+        ST.form.epcCadO="none";
+      }
+    } else {
+      ST.form.epcCadO="none";
+    }
+    ST.gisPhase="done";render();
+  }catch(err){ST.gisPhase="error";ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
+}
+
+function epcGisApply(){
   const ov=ST.gisOverrides;
   if(ov.zone!==undefined)ST.form.zone=ov.zone||null;
   if(ov.lotSize!==undefined)ST.form.lotSize=ov.lotSize===""?null:Number(ov.lotSize);
@@ -806,6 +984,7 @@ function render(){
     h+=`<p class="q-sub">Choose the city for this property analysis.</p>`;
     h+=`<div class="jur-card ${ST.jurisdiction==="denver"?"sel":""}" onclick="ST.jurisdiction='denver';resetState(true);ST.pg=0;render()"><p class="jur-name">Denver</p><p class="jur-desc">Denver Zoning Code — Residential Care Types 1–4 (DZC Art. 11, §§ 11.2.8–11.2.12)</p></div>`;
     h+=`<div class="jur-card ${ST.jurisdiction==="cos"?"sel":""}" onclick="ST.jurisdiction='cos';resetState(true);ST.pg=0;render()"><p class="jur-name">Colorado Springs</p><p class="jur-desc">Unified Development Code — Group Living / Human Services Establishment (UDC Ch. 7, § 7.3.301E)</p></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="epc"?"sel":""}" onclick="ST.jurisdiction='epc';resetState(true);ST.pg=0;render()"><p class="jur-name">El Paso County</p><p class="jur-desc">Land Development Code — Group Home / Institutional BH Pathways (LDC Ch. 5, § 5.2.17) · SP-05 enforcement policy active</p></div>`;
     if(ST.jurisdiction){h+=`<div class="btn-row"><button class="btn-primary" onclick="advance()">Next</button></div>`}
     APP.innerHTML=h;return;
   }
@@ -1017,6 +1196,93 @@ function render(){
     else if(page.id==="maintained"){h+=`<p class="q-title">Continuously maintained?</p><p class="q-sub">Has the existing use been continuously maintained? Discontinuance for 12+ months loses nonconforming status. (§ 7.5.804E)</p><div class="radio-row">${r3("maintained",f.maintained)}</div><div class="btn-row">${bk}${f.maintained!==null?nx:""}</div>`}
     else if(page.id==="review"){h+=`<p class="q-title">Review and run</p><p class="q-sub">Confirm your inputs, then run the analysis.</p>`;h+=rFacts();h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="go()">Run analysis</button></div>`}
   }
+
+  /* ── EPC INTAKE PAGES — site facts only; engine does classification ── */
+  if(ST.jurisdiction==="epc"){
+    if(page.id==="epcAddress"){
+      h+=`<p class="q-title">Property address</p>`;
+      h+=`<p class="q-sub">Enter an El Paso County (unincorporated) address. The tool will query county zoning and parcel layers to auto-populate zone district and lot size.</p>`;
+      if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped"){
+        h+=`<div class="addr-row"><input type="text" id="epc-addr" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 7250 Campus Dr, 11525 Ridgeline Dr" /><button class="btn-primary addr-btn" onclick="epcGisStart()">Look up</button></div>`;
+        if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip — enter manually</button></div>`}
+        else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('epc-addr')?.value||null;advance()">Next</button></div>`}
+        else{h+=`<div class="field-help">Press "Look up" to query EPC zoning and parcel layers, or skip to enter manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('epc-addr')?.value||null;ST.gisPhase='skipped';advance()">Skip — enter manually</button></div>`}
+      }
+      else if(ST.gisPhase==="searching"){h+=`<div class="lookup-status"><span class="spinner"></span>Geocoding address\u2026</div>`}
+      else if(ST.gisPhase==="disambig"){
+        h+=`<div style="margin:12px 0;"><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">Multiple addresses matched. Select the correct one:</p><ul class="disambig-list">`;
+        ST.gisAddresses.forEach((a,i)=>{h+=`<li class="disambig-item" onclick="epcGisSelect(${i})"><span class="disambig-addr">${esc(a.addr)}</span></li>`});
+        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.gisPhase='idle';render()">Try a different address</button></div>`;
+      }
+      else if(ST.gisPhase==="querying"){h+=`<div class="lookup-status"><span class="spinner"></span>Querying zoning, parcel, and overlay layers\u2026</div>`}
+      else if(ST.gisPhase==="done"){
+        const gd=ST.gisData;const knownZone=gd.autoZone&&EPC_ZL.includes(gd.autoZone);
+        // City cross-validation warning
+        if(gd.cityWarning){
+          const isFatal=gd.cityName&&!gd.autoZone; // inside city, no EPC zone = wrong jurisdiction
+          h+=`<div style="background:${isFatal?"#2E1010":"#2E2410"};border:1px solid ${isFatal?"#5A2020":"#5A4A20"};border-radius:10px;padding:1rem 1.25rem;margin-bottom:12px;">`;
+          h+=`<p style="font-size:13px;font-weight:500;color:${isFatal?"#F09595":"#FBBF24"};margin:0 0 4px;">${isFatal?"\u26d4 Incorporated City Detected":"\u26a0 Jurisdiction Verification Needed"}</p>`;
+          h+=`<p style="font-size:12px;color:${isFatal?"#D87070":"#C4A840"};margin:0;">${esc(gd.cityWarning)}</p></div>`;
+        }
+        h+=`<div class="lookup-success"><div class="lk-title">${esc(gd.matchedAddr)}</div><div style="margin-top:8px;">`;
+        h+=`<div class="auto-field"><span class="auto-label">Jurisdiction</span><span class="auto-val">${gd.cityName?esc(gd.cityName)+" (incorporated)":"Unincorporated El Paso County"}<span class="auto-badge api">API</span></span></div>`;
+        h+=`<div class="auto-field"><span class="auto-label">Zone district</span><span class="auto-val">${gd.autoZone?esc(gd.autoZone):"Not found"}`;
+        if(gd.autoZone&&!knownZone)h+=` <span style="color:#FBBF24;font-size:11px;">(not in Use Table)</span>`;
+        h+=`<span class="auto-badge api">API</span></span></div>`;
+        h+=`<div class="auto-field"><span class="auto-label">Lot size</span><span class="auto-val">${gd.autoLot?gd.autoLot.toLocaleString()+" sf":"Not found"}<span class="auto-badge api">API</span></span></div>`;
+        if(gd.parcelId)h+=`<div class="auto-field"><span class="auto-label">Parcel</span><span class="auto-val">${gd.parcelId}${gd.assessorLink?` <a href="${gd.assessorLink}" target="_blank" rel="noopener" style="color:#6EA4E8;font-size:11px;">Assessor &#8599;</a>`:""}</span></div>`;
+        if(gd.autoOverlay)h+=`<div class="auto-field"><span class="auto-label">Overlay</span><span class="auto-val">${esc(gd.autoOverlay)}<span class="auto-badge api">API</span></span></div>`;
+        h+=`</div></div>`;
+        h+=`<details class="override-row"><summary>Override auto-populated values</summary><div class="override-grid">`;
+        h+=`<div class="override-item"><label>Zone district</label><select id="ov-zone" onchange="ST.gisOverrides.zone=this.value"><option value="">— Use API value —</option>`;
+        for(const[gn,gd2] of Object.entries(EPC_ZG)){h+=`<optgroup label="${gn}">`;gd2.list.forEach(z=>{h+=`<option value="${z}"${ST.gisOverrides.zone===z?" selected":""}>${z}</option>`});h+=`</optgroup>`}
+        h+=`</select></div>`;
+        h+=`<div class="override-item"><label>Lot size (sf)</label><input type="number" id="ov-lot" value="${ST.gisOverrides.lotSize||""}" placeholder="${gd.autoLot||"Enter value"}" onchange="ST.gisOverrides.lotSize=this.value"></div>`;
+        h+=`</div></details>`;
+        h+=`<div class="data-caveats">Zone from EPC ZoningAreas layer; lot size from Parcels layer (Shape.STArea in CO State Plane ft\u00B2); jurisdiction from IncorporatedCities layer. Verify with PCD.</div>`;
+        h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="epcGisApply()">Accept and continue</button></div>`;
+      }
+      APP.innerHTML=h;
+      const addrInput=document.getElementById("epc-addr");
+      if(addrInput){if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped")addrInput.focus();addrInput.addEventListener("keydown",e=>{if(e.key==="Enter")epcGisStart()})}
+      return;
+    }
+    else if(page.id==="epcZone"){
+      const autoSrc=ST.gisPhase==="done"&&ST.gisAutoZone&&EPC_ZL.includes(f.zone||"")&&!ST.gisOverrides.zone;
+      h+=`<p class="q-title">Zone district</p><p class="q-sub">`;
+      if(autoSrc)h+=`Auto-populated from EPC zoning layer. Confirm or change.`;else h+=`Select the zone district for this property.`;
+      h+=`</p><select class="zs" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
+      for(const[gn,gd] of Object.entries(EPC_ZG)){h+=`<optgroup label="${gn}">`;gd.list.forEach(z=>{h+=`<option value="${z}" ${f.zone===z?"selected":""}>${z}</option>`});h+=`</optgroup>`}
+      h+=`</select>`;
+      if(autoSrc)h+=`<div class="field-help" style="color:#4ADE80;">Source: EPC ZoningAreas layer <span class="auto-badge api" style="vertical-align:middle;">API</span></div>`;
+      else h+=`<a class="gis-link" href="${EPC_ZMAP}" target="_blank" rel="noopener">Open El Paso County zoning map &#8599;</a>`;
+      h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
+    }
+    else if(page.id==="epcPUD"){
+      h+=`<div style="background:#1C1C2A;border:1px solid #2A2A3A;border-radius:10px;padding:1.25rem;">`;
+      h+=`<p style="font-size:16px;font-weight:500;color:#FBBF24;margin:0 0 6px;">PUD District — Use Table Not Applicable</p>`;
+      h+=`<p style="font-size:13px;color:#9B9BA7;margin:0 0 10px;">Uses are governed by the approved PUD development plan and development guide (§ 3.2.5(F)(2)), not Table 5-1. Variance of use is <strong>not available</strong> in PUD districts (§ 5.3.3(B)(1)).</p>`;
+      h+=`<p style="font-size:12px;color:#6B6B78;margin:0;">Contact El Paso County PCD to obtain the PUD plan for this property.</p></div>`;
+      h+=`<div class="btn-row"><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`;
+    }
+    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.25rem;"><p style="font-size:16px;font-weight:500;color:#F09595;margin:0 0 6px;">No pathways available</p><p style="font-size:13px;color:#F09595;margin:0;">No behavioral health or residential care uses are permitted in ${f.zone}.</p></div><div class="btn-row"><button class="btn-secondary" onclick="ST.pg=0;render()">Start over</button></div>`}
+    else if(page.id==="licensing"){h+=`<p class="q-title">Licensing and certification</p><p class="q-sub">Can the operator obtain all required state licensing or certification?</p><div class="radio-row">${r3("licensing",f.licensing)}</div><div class="info-box">State licensing is required for mental illness and DD group homes (C.R.S. § 30-28-115). CARR certification is voluntary for recovery residences. The PCD Director memo (SP-05) does not waive state licensing requirements.</div><div class="btn-row">${bk}${f.licensing!==null?nx:""}</div>`}
+    else if(page.id==="correctional"){h+=`<p class="q-title">Correctional supervision</p><p class="q-sub">Will the facility serve persons on probation or parole?</p><div class="radio-row">${r2("correctional",f.correctional)}</div><div class="field-help">Affects Half-Way House pathway eligibility and mental illness group home exclusion rules.</div><div class="btn-row">${bk}${f.correctional!==null?nx:""}</div>`}
+    else if(page.id==="epcSexOffender"){h+=`<p class="q-title">Sex offender population</p><p class="q-sub">Will the facility include any person required to register as a sex offender (C.R.S. § 18-3-412.5)?</p><div class="radio-row">${r3("epcSexOffender",f.epcSexOffender)}</div><div class="field-help">Group homes may not include registered sex offenders unless related by blood, marriage, adoption, or in foster care (§ 5.2.17(C)(2)).</div><div class="btn-row">${bk}${f.epcSexOffender!==null?nx:""}</div>`}
+    else if(page.id==="op24hr"){h+=`<p class="q-title">24-hour operation</p><p class="q-sub">Will the facility operate 24 hours per day?</p><div class="radio-row">${r2("op24hr",f.op24hr)}</div><div class="info-box">The SP-05 enforcement policy suspension applies to group homes providing <strong>24-hour care or permanent living</strong>. If the operation is not 24-hour, the code-text rules may apply even under SP-05.</div><div class="btn-row">${bk}${f.op24hr!==null?nx:""}</div>`}
+    else if(page.id==="overnight"){h+=`<p class="q-title">Overnight stays</p><p class="q-sub">Are overnight stays part of the operational model?</p><div class="radio-row">${r2("overnight",f.overnight)}</div><div class="field-help">If "No," the Medical Clinic (outpatient only) pathway may be viable. If "Yes," the engine tests residential and inpatient pathways.</div><div class="btn-row">${bk}${f.overnight!==null?nx:""}</div>`}
+    else if(page.id==="epcNonprofit"){h+=`<p class="q-title">Nonprofit operator</p><p class="q-sub">Is the facility operated by a not-for-profit organization?</p><div class="radio-row">${r2("epcNonprofit",f.epcNonprofit)}</div><div class="field-help">Enables the Institution, Philanthropic pathway — a not-for-profit establishment whose purpose is to increase the well-being of mankind (§ 1.15).</div><div class="btn-row">${bk}${f.epcNonprofit!==null?nx:""}</div>`}
+    else if(page.id==="epcSeparation"){
+      h+=`<p class="q-title">Separation distance</p><p class="q-sub">Distance to the nearest existing group home, family care home, or child care center <strong>along the same road</strong> (lot boundary to lot boundary)?</p>`;
+      h+=`<input type="number" id="epc-sep" value="${f.epcSeparation===null?"":f.epcSeparation}" placeholder="e.g. 600" style="width:220px;">`;
+      h+=`<div class="field-help">Code text: 500 ft along the same road (§ 5.2.17(A)). Leave blank if unknown.</div>`;
+      h+=`<div class="info-box"><strong>SP-05 enforcement policy:</strong> Separation is NOT currently enforced for group homes with 24-hour care or permanent living. This input is for the code-text contingency layer.</div>`;
+      h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="var v=document.getElementById('epc-sep').value;ST.form.epcSeparation=v===''?null:Number(v);advance()">Next</button></div>`;
+    }
+    else if(page.id==="existingRC"){h+=`<p class="q-title">Existing group home or BH use</p><p class="q-sub">Is there an existing group home or behavioral health use on this property?</p><div class="radio-row">${r3("existingRC",f.existingRC)}</div><div class="btn-row">${bk}${f.existingRC!==null?nx:""}</div>`}
+    else if(page.id==="maintained"){h+=`<p class="q-title">Continuously maintained?</p><p class="q-sub">Has the existing use been continuously maintained? Abandonment for 1 year means only conforming uses may resume (§ 5.6.3).</p><div class="radio-row">${r3("maintained",f.maintained)}</div><div class="btn-row">${bk}${f.maintained!==null?nx:""}</div>`}
+    else if(page.id==="review"){h+=`<p class="q-title">Review and run</p><p class="q-sub">Confirm your inputs, then run the analysis.</p>`;h+=rFacts();h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="go()">Run analysis</button></div>`}
+  }
   APP.innerHTML=h;
 }
 
@@ -1030,7 +1296,8 @@ function esc(s){return(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").repla
 
 function rFacts(){
   const f=ST.form;
-  const items=[["Jurisdiction",ST.jurisdiction==="denver"?"Denver":"Colorado Springs"],["Address",esc(f.address)||"\u2014"],["Zone",f.zone||"\u2014"]];
+  const jurName=ST.jurisdiction==="denver"?"Denver":ST.jurisdiction==="cos"?"Colorado Springs":"El Paso County";
+  const items=[["Jurisdiction",jurName],["Address",esc(f.address)||"\u2014"],["Zone",f.zone||"\u2014"]];
   if(f.lotSize!=null)items.push(["Lot size",f.lotSize.toLocaleString()+" sf"]);
   items.push(["Licensing",f.licensing||"\u2014"]);
   if(ST.jurisdiction==="denver"){
@@ -1041,6 +1308,16 @@ function rFacts(){
     if(f.rcWithin1mi!=null)items.push(["RC within 1 mi",String(f.rcWithin1mi)]);
     if(f.rcType34within1mi!=null)items.push(["Type 3/4 within 1 mi",String(f.rcType34within1mi)]);
     if(f.distType34!=null)items.push(["Dist. to nearest 3/4",f.distType34.toLocaleString()+" ft"]);
+  } else if(ST.jurisdiction==="epc"){
+    items.push(["Correctional",f.correctional||"\u2014"]);
+    items.push(["Sex offender",f.epcSexOffender||"\u2014"]);
+    items.push(["24-hour",f.op24hr||"\u2014"]);
+    items.push(["Overnight",f.overnight||"\u2014"]);
+    if(f.epcNonprofit!=null)items.push(["Nonprofit",f.epcNonprofit]);
+    if(f.epcSeparation!=null)items.push(["Separation (along road)",f.epcSeparation.toLocaleString()+" ft"]);
+    if(f.epcCadO==="cado")items.push(["CAD-O overlay","Yes — sub-zone TBD"]);
+    items.push(["Existing use",f.existingRC||"\u2014"]);
+    if(f.existingRC==="yes")items.push(["Maintained",f.maintained||"\u2014"]);
   } else {
     items.push(["Correctional",f.correctional||"\u2014"],["FHA-protected",f.fhaProtected||"\u2014"],["24-hour",f.op24hr||"\u2014"]);
     if(f.targetOver60)items.push(["Over 60 population","Yes"]);
@@ -1058,6 +1335,7 @@ function rFacts(){
 
 function go(){
   if(ST.jurisdiction==="denver")ST.results=runEngine(ST.form);
+  else if(ST.jurisdiction==="epc")ST.results=runEPCEngine(ST.form);
   else ST.results=runCOSEngine(ST.form);
   ST.activeTab="dashboard";ST.expanded={};render();
 }
@@ -1425,7 +1703,318 @@ function runCOSEngine(f){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   RESULTS RENDERER (shared — handles both jurisdictions)
+   EL PASO COUNTY RULE ENGINE
+   Source: epc_ruleset_v0_3.md — 16 pathways, dual-track SP-05
+   ═══════════════════════════════════════════════════════════════════ */
+function runEPCEngine(f){
+  const z=f.zone;
+  if(z==="PUD")return{error:"PUD district — use eligibility governed by the approved PUD development plan, not Table 5-1. Variance of use is not available in PUD (§ 5.3.3(B)(1)). Verify with El Paso County PCD."};
+  const ut=EPC_UT[z];if(!ut)return{error:"Zone not found in EPC Use Table."};
+  const lic=f.licensing,cor=f.correctional==="yes",sexOff=f.epcSexOffender;
+  const op24=f.op24hr==="yes",overnight=f.overnight==="yes";
+  const nonprofit=f.epcNonprofit==="yes";
+  const sep=f.epcSeparation,cadO=f.epcCadO||"none";
+  const exRC=f.existingRC,mnt=f.maintained;
+  const isGH=ut.gh==="A4"; // group home permitted in this zone
+  const isComm=epcIsCommercial(z);
+  const R=[],gS=[],gC=[];
+
+  // ──── PASS 2: Global rules ────────────────────────────────────
+
+  // G-01: Licensing (scope: all pathways, but hard stop only for state-licensed sub-types)
+  if(lic==="no")gS.push({msg:"Cannot obtain state licensing/certification",cite:"§ 5.2.17(C)(4)"});
+  if(lic==="unknown")gC.push({msg:"Licensing status unknown — copies of all applicable licenses must be maintained on premises",cite:"§ 5.2.17(C)(4)",blocking:true,resolve:"Confirm with CDPHE/BHA/CARR."});
+
+  // G-02: Sex offender — hard stop for all GH pathways (applied per-pathway, but if yes, note globally)
+  // Applied per-pathway below since it only affects GH
+
+  // G-03: Building/fire/health code — informational, applied per GH pathway below
+
+  // G-04: No nonconforming rights — applied per-pathway for existing ops
+
+  // If global hard stop, bail
+  if(gS.length)return{zone:z,gS,gC,results:[],p2:"fail"};
+
+  // SP-05 static note for all GH pathways
+  const sp05Note={msg:"SP-05 enforcement policy active (PCD Director memo Oct. 2024): occupancy thresholds, separation requirements, and SU routing for group homes are not currently enforced. Building code, fire code, and state licensing remain applicable.",cite:"SP-05 / HB24-1007 / SB24-048",blocking:false,resolve:"Monitor LDC update progress; verify policy remains in effect before relying on it."};
+  const sp05Sep={msg:"Code-text contingency: if SP-05 reverts, 500 ft separation along same road applies to this sub-type (§ 5.2.17(A)). GH for Disabled Persons is exempt.",cite:"§ 5.2.17(A)",blocking:false};
+  const bldgCode={msg:"Building, fire, and health code compliance required. IBC R-4 occupancy threshold (typically 16 residents) may limit bed count independent of zoning.",cite:"§ 5.2.17(C)(3)",blocking:false};
+
+  // ──── PASS 3: Pathway tester ──────────────────────────────────
+
+  function tP(id,nm,th,utKey,maxRes,fn){
+    const perm=ut[utKey];
+    if(perm==="N"){
+      R.push({id,nm,th,v:"no",mg:null,stops:[{msg:"Not permitted in "+z,cite:"Table 5-1"}],cav:[],proc:"N/A",rat:"",wf:[],rsk:{},rank:"Not viable"});
+      return;
+    }
+    const pw={id,nm,th,v:"yes",mg:maxRes,stops:[],cav:[...gC],proc:perm,rat:"",wf:[],rsk:{},rank:""};
+    fn(pw,perm);
+    if(pw.stops.length)pw.v="no";
+    else if(pw.cav.some(c=>c.blocking))pw.v="conditional";
+    R.push(pw);
+  }
+
+  // ──── CAD-O overlay modifier ──────────────────────────────────
+  function cadOBlock(pw,useType){
+    if(cadO==="none"||!cadO)return false;
+    // cadO === "cado": property is inside CAD-O boundary but sub-zone (ADNL/APZ-1/APZ-2/ANAV) unknown
+    // Most sub-zones are surmountable (APZ-2/ANAV = no restriction, ADNL = noise cert).
+    // Only APZ-1 prohibits hospital/conv hospital — small area, rare.
+    if(cadO==="cado"){
+      if(useType==="convHosp"){
+        pw.cav.push({msg:"Property is within the CAD-O. Convalescent Hospital is prohibited in the APZ-1 sub-zone and has no additional restrictions in APZ-2/ANAV. Verify sub-zone with PCD.",cite:"§ 3.4.2",blocking:false});
+      }
+      if(useType==="hosp"){
+        pw.cav.push({msg:"Property is within the CAD-O. Hospital/institutional uses require a 30 dBA noise reduction certificate in the ADNL sub-zone and are prohibited in APZ-1. No additional restrictions in APZ-2/ANAV. Verify sub-zone with PCD.",cite:"§ 3.4.2",blocking:false});
+      }
+    }
+    return false;
+  }
+
+  // ──── Workflow templates ───────────────────────────────────────
+  const WF_GH_SP05=[{t:"Confirm SP-05 enforcement policy is still active with PCD"},{t:"Obtain state licensing/certification as applicable"},{t:"Apply for Group Home Permit ($192)"},{t:"Submit residential site plan ($165)"},{t:"PCD staff review"},{t:"Begin operations"}];
+  const WF_GH_CODE_SMALL=[{t:"Obtain state licensing/certification"},{t:"Apply for Group Home Permit ($192)"},{t:"Submit residential site plan ($165)"},{t:"PCD staff review"},{t:"Begin operations"}];
+  const WF_GH_CODE_LARGE=[{t:"Obtain state licensing/certification"},{t:"Pre-application meeting with PCD (recommended)"},{t:"Submit Special Use application ($6,401) with FHAA reasonable accommodation documentation"},{t:"PCD Director administrative review (FHAA criteria per § 5.2.17(D)(2))"},{t:"If elevated: BoCC hearing (not Planning Commission)"},{t:"Submit site plan"},{t:"Begin operations"}];
+  const WF_ADMIN=[{t:"Pre-application meeting (recommended)"},{t:"Submit site development plan ($1,685–$3,955)"},{t:"PCD staff review"},{t:"Begin operations"}];
+  const WF_SU=[{t:"Pre-application meeting with PCD"},{t:"Submit Special Use application ($6,401)"},{t:"Adjacent owner notification"},{t:"Agency referrals"},{t:"PCD Director administrative review (§ 5.3.2(C) criteria)"},{t:"If elevated: BoCC public hearing"},{t:"Submit site development plan"},{t:"Begin operations"}];
+
+  // ──── GROUP HOME PATHWAYS (8) ─────────────────────────────────
+  // All 8 share the same Use Table key "gh" but differ in sub-type rules
+
+  function ghPathway(id,nm,th,subtype,isLarge,maxCode){
+    if(!isGH){
+      R.push({id,nm,th,v:"no",mg:null,stops:[{msg:"Group Home not permitted in "+z,cite:"Table 5-1"}],cav:[],proc:"N/A",rat:"",wf:[],rsk:{},rank:"Not viable"});
+      return;
+    }
+    const pw={id,nm,th,v:"yes",mg:null,stops:[],cav:[...gC],proc:"A",rat:"",wf:[],rsk:{},rank:""};
+
+    // G-02: Sex offender prohibition
+    if(sexOff==="yes"){pw.stops.push({msg:"Sex offender population prohibited in group homes",cite:"§ 5.2.17(C)(2)"});R.push({...pw,v:"no"});return}
+    if(sexOff==="unknown")pw.cav.push({msg:"Verify no registered sex offenders (prohibited unless related by blood/marriage/adoption or foster care)",cite:"§ 5.2.17(C)(2)",blocking:true,resolve:"Screen population per C.R.S. § 18-3-412.5."});
+
+    // G-03: Building code note
+    pw.cav.push(bldgCode);
+
+    // SP-05 enforcement policy note
+    pw.cav.push(sp05Note);
+
+    // === SP-05 CURRENT POSTURE (default) ===
+    if(op24){
+      // SP-05 applies: all group homes = Allowed, no separation, no occupancy limit
+      pw.mg=999; // no LDC cap enforced
+      pw.proc="Allowed (SP-05)";
+      pw.rat=nm+" in "+z+". Under SP-05 enforcement policy: Allowed regardless of size. No separation enforced. No occupancy threshold. Building code (IBC R-4 at ~16 residents) is the primary constraint.";
+      pw.wf=[...WF_GH_SP05];
+      pw.rsk={nimby:"Low",escalation:"Low",timeline:"2–6 weeks",discretion:"Minimal",approval:"Low",fee:"$357"};
+      pw.rank="Easiest (SP-05)";
+
+      // Code-text contingency caveats for large pathways
+      if(isLarge){
+        pw.cav.push({msg:"Code-text contingency: if SP-05 reverts, 9+ occupants require Special Use with FHAA criteria (§ 5.2.17(D)). Fee would increase to $6,401+. Timeline: 3–6+ months.",cite:"§ 5.2.17(D); Table 5-3",blocking:false});
+      }
+      // Separation contingency for non-disabled sub-types
+      if(subtype!=="disabled"){
+        pw.cav.push(sp05Sep);
+        // If user provided separation data, note code-text status
+        if(sep!==null&&sep<500){
+          pw.cav.push({msg:"Code-text contingency: separation "+sep+" ft < 500 ft minimum. If SP-05 reverts, this would block this pathway unless administrative relief (250 ft min, § 5.5.1(B)(5)) is obtained.",cite:"§ 5.2.17(A)",blocking:false});
+        }
+      }
+    } else {
+      // Not 24-hour — SP-05 may not apply (memo says "24-hour care or permanent living")
+      pw.cav.push({msg:"SP-05 enforcement policy applies to group homes with 24-hour care or permanent living. Non-24-hour operation may not qualify — code-text rules may apply. Verify with PCD.",cite:"SP-05 memo",blocking:true,resolve:"Confirm with PCD whether SP-05 applies to this operational model."});
+      // Fall back to code-text logic
+      if(isLarge){
+        pw.mg=999;
+        pw.proc="Special Use (FHAA) — code text";
+        pw.rat=nm+" in "+z+". Code text: 9+ requires Special Use with FHAA reasonable accommodation criteria.";
+        pw.wf=[...WF_GH_CODE_LARGE];
+        pw.rsk={nimby:"Medium–High",escalation:"Medium",timeline:"3–6+ months",discretion:"Moderate",approval:"Medium",fee:"$6,401+"};
+        pw.rank="Moderate (code text)";
+      } else {
+        pw.mg=maxCode;
+        pw.proc="Allowed — code text";
+        pw.rat=nm+" in "+z+". Code text: ≤"+maxCode+" = Allowed. Site plan only.";
+        pw.wf=[...WF_GH_CODE_SMALL];
+        pw.rsk={nimby:"Low",escalation:"Low",timeline:"2–6 weeks",discretion:"Minimal",approval:"Low",fee:"$357"};
+        pw.rank="Easy (code text)";
+      }
+      // Separation test (code text) for non-disabled
+      if(subtype!=="disabled"&&!isComm){
+        if(sep!==null&&sep<500){
+          pw.stops.push({msg:"Separation: "+sep+" ft along same road < 500 ft minimum (code text applies — non-24-hour)",cite:"§ 5.2.17(A)"});
+        } else if(sep===null){
+          pw.cav.push({msg:"Separation distance unknown — 500 ft along same road required under code text",cite:"§ 5.2.17(A)",blocking:true,resolve:"Measure from lot boundary along road to nearest GH/childcare/family care."});
+        }
+      }
+    }
+
+    // G-07: NGRI/violent offender exclusion — mental illness only
+    if(subtype==="mental"&&cor){
+      pw.cav.push({msg:"Correctional population: C.R.S. § 30-28-115(2)(b.5) excludes persons convicted of violent felonies and NGRI for violent offenses from mental illness group homes",cite:"C.R.S. § 30-28-115(2)(b.5)",blocking:true,resolve:"Verify population eligibility."});
+    }
+
+    // State licensing prerequisite for preemption (mental illness, DD, aged)
+    if(subtype==="mental"&&lic!=="yes"){
+      pw.cav.push({msg:"State licensing required for C.R.S. § 30-28-115(2)(b.5) preemption. If SP-05 reverts, unlicensed operation loses residential-use-by-right status for ≤8.",cite:"C.R.S. § 30-28-115(2)(b.5)",blocking:false});
+    }
+    if(subtype==="dd"&&lic!=="yes"){
+      pw.cav.push({msg:"State licensing required for C.R.S. § 30-28-115(2)(a) preemption.",cite:"C.R.S. § 30-28-115(2)(a)",blocking:false});
+    }
+    if(subtype==="aged"&&lic!=="yes"){
+      pw.cav.push({msg:"State licensing/ALR certification may be required for C.R.S. § 30-28-115(2)(b) preemption.",cite:"C.R.S. § 30-28-115(2)(b)",blocking:false});
+    }
+
+    // SP-04: Recovery residence preemption note (disabled sub-type only)
+    if(subtype==="disabled"){
+      pw.cav.push({msg:"Recovery residences may also invoke C.R.S. § 30-28-115(2)(b.7) state preemption (residential use, subject only to regulations of like dwellings). Legal argument — not an administrative pathway.",cite:"C.R.S. § 30-28-115(2)(b.7)",blocking:false});
+    }
+
+    // Boarding house secondary pathway note (disabled sub-type only)
+    if(subtype==="disabled"&&ut.boarding!=="N"){
+      pw.cav.push({msg:"Boarding House is a secondary pathway if residents pay compensation and owner/manager lives on-site. Group Home controls per § 5.1.5 (specific over general), but Boarding House has different zone eligibility.",cite:"§ 5.1.5",blocking:false});
+    }
+
+    if(pw.stops.length)pw.v="no";
+    else if(pw.cav.some(c=>c.blocking))pw.v="conditional";
+    R.push(pw);
+  }
+
+  ghPathway("GH-DIS-S","GH Disabled Persons ≤8","≤8 disabled persons (incl. SUD recovery)","disabled",false,8);
+  ghPathway("GH-DIS-L","GH Disabled Persons 9+","9+ disabled persons (no LDC cap enforced)","disabled",true,999);
+  ghPathway("GH-MI-S","GH Mental Illness ≤8","≤8 persons w/ mental illness (state-licensed)","mental",false,8);
+  ghPathway("GH-MI-L","GH Mental Illness 9+","9+ persons w/ mental illness (no LDC cap enforced)","mental",true,999);
+  ghPathway("GH-DD-S","GH Developmentally Disabled ≤8","≤8 IDD persons (state-licensed)","dd",false,8);
+  ghPathway("GH-DD-L","GH Developmentally Disabled 9+","9+ IDD persons (no LDC cap enforced)","dd",true,999);
+  ghPathway("GH-AGE-S","GH Aged/ALR ≤8","≤8 persons aged 60+","aged",false,8);
+  ghPathway("GH-AGE-L","GH Aged/ALR 9+","9+ persons aged 60+ (no LDC cap enforced)","aged",true,999);
+
+  // ──── REHABILITATION FACILITY ─────────────────────────────────
+  tP("REHAB","Rehabilitation Facility","Institutional SUD/alcohol treatment (no LDC bed cap)","rehab",999,(pw,perm)=>{
+    if(cadOBlock(pw,"hosp"))return; // institutional use
+    const isA=perm==="A";
+    pw.proc=isA?"Allowed — SDP review":"Special Use (§ 5.3.2)";
+    pw.rat="Rehabilitation Facility in "+z+". Institutional (not a group home). "+
+      (isA?"Allowed — site development plan review only.":"Special Use required — PCD Director decides.");
+    pw.wf=isA?[...WF_ADMIN]:[...WF_SU];
+    if(isA){pw.rsk={nimby:"Low–Medium",escalation:"Low",timeline:"2–6 weeks",discretion:"Low",approval:"Low",fee:"$1,685–$3,955"};pw.rank="Good"}
+    else{pw.rsk={nimby:"Medium–High",escalation:"Medium",timeline:"3–6 months",discretion:"Moderate",approval:"Medium",fee:"$6,401+"};pw.rank="Moderate"}
+    if(nonprofit)pw.cav.push({msg:"Nonprofit operator: Institution Philanthropic is an alternate pathway with potentially wider zone eligibility",cite:"§ 1.15",blocking:false});
+  });
+
+  // ──── HOSPITAL ────────────────────────────────────────────────
+  tP("HOSP","Hospital","Inpatient medical/surgical (incl. psych, medical detox)","hosp",999,(pw,perm)=>{
+    if(cadOBlock(pw,"hosp"))return;
+    const isA=perm==="A";
+    pw.proc=isA?"Allowed — SDP review":"Special Use (§ 5.3.2)";
+    pw.rat="Hospital in "+z+". Viable for inpatient psychiatry and medical detox. "+
+      (isA?"Allowed.":"Special Use required.");
+    pw.wf=isA?[...WF_ADMIN]:[...WF_SU];
+    if(isA){pw.rsk={nimby:"Low–Medium",escalation:"Low",timeline:"2–6 weeks",discretion:"Low",approval:"Low",fee:"$1,685–$3,955"};pw.rank="Good"}
+    else{pw.rsk={nimby:"Medium–High",escalation:"Medium",timeline:"3–6 months",discretion:"Moderate",approval:"Medium",fee:"$6,401+"};pw.rank="Moderate"}
+  });
+
+  // ──── HOSPITAL, CONVALESCENT ──────────────────────────────────
+  tP("CONV","Hospital, Convalescent","Nursing/LTC/sub-acute (no LDC bed cap)","convHosp",999,(pw,perm)=>{
+    if(cadOBlock(pw,"convHosp"))return;
+    const isA=perm==="A";
+    pw.proc=isA?"Allowed — SDP review":"Special Use (§ 5.3.2)";
+    pw.rat="Hospital, Convalescent in "+z+". Ongoing care as principal function. Includes nursing homes, LTC. "+
+      (isA?"Allowed.":"Special Use required.");
+    pw.wf=isA?[...WF_ADMIN]:[...WF_SU];
+    if(isA){pw.rsk={nimby:"Low",escalation:"Low",timeline:"2–6 weeks",discretion:"Low",approval:"Low",fee:"$1,685–$3,955"};pw.rank="Good"}
+    else{pw.rsk={nimby:"Medium",escalation:"Medium",timeline:"3–6 months",discretion:"Moderate",approval:"Medium",fee:"$6,401+"};pw.rank="Moderate–Hard"}
+  });
+
+  // ──── MEDICAL CLINIC ──────────────────────────────────────────
+  tP("CLINIC","Medical Clinic","Outpatient BH/MAT/IOP (no overnight)","medClinic",null,(pw,perm)=>{
+    if(overnight){pw.stops.push({msg:"Medical Clinic does not allow overnight lodging — outpatient only",cite:"§ 1.15 (def)"});return}
+    pw.proc="Allowed — SDP review";
+    pw.mg=null; // outpatient, no beds
+    pw.rat="Medical Clinic in "+z+". Outpatient health/mental health care. Viable for MAT, IOP, outpatient BH. No overnight.";
+    pw.wf=[...WF_ADMIN];
+    pw.rsk={nimby:"Very low",escalation:"Low",timeline:"2–6 weeks",discretion:"Minimal",approval:"Low",fee:"$1,685–$3,955"};pw.rank="Easiest";
+  });
+
+  // ──── HALF-WAY HOUSE ──────────────────────────────────────────
+  tP("HALF","Half-Way House","Adults on probation/parole (no LDC cap)","halfway",999,(pw,perm)=>{
+    if(!cor){pw.stops.push({msg:"Half-Way House requires population exclusively on probation/parole",cite:"§ 1.15 (def)"});return}
+    pw.proc="Special Use (§ 5.3.2)";
+    pw.rat="Half-Way House in "+z+". Group care for adults on probation/parole. Special Use required in all 4 eligible zones.";
+    pw.wf=[...WF_SU];
+    pw.rsk={nimby:"Very high",escalation:"High",timeline:"3–6+ months",discretion:"Significant",approval:"High",fee:"$6,401"};pw.rank="Hard";
+  });
+
+  // ──── HUMAN SERVICE SHELTER ───────────────────────────────────
+  tP("SHELTER","Human Service Shelter","Residential lodging + supportive services","humanSvc",999,(pw,perm)=>{
+    const isA=perm==="A";
+    pw.proc=isA?"Allowed — SDP review":"Special Use (§ 5.3.2)";
+    pw.rat="Human Service Shelter in "+z+". Residential lodging + supportive services for persons in need. "+
+      (isA?"Allowed (CS zone).":"Special Use required.");
+    pw.wf=isA?[...WF_ADMIN]:[...WF_SU];
+    if(isA){pw.rsk={nimby:"Medium",escalation:"Low–Medium",timeline:"2–6 weeks",discretion:"Low",approval:"Low–Medium",fee:"$1,685–$3,955"};pw.rank="Moderate"}
+    else{pw.rsk={nimby:"High",escalation:"High",timeline:"3–6 months",discretion:"Significant",approval:"Medium–High",fee:"$6,401+"};pw.rank="Hard"}
+  });
+
+  // ──── BOARDING AND ROOMING HOUSE ──────────────────────────────
+  tP("BOARD","Boarding/Rooming House","5+ lodgers for compensation","boarding",999,(pw,perm)=>{
+    const isA=perm==="A";
+    pw.proc=isA?"Allowed — SDP review":"Special Use (§ 5.3.2)";
+    pw.rat="Boarding/Rooming House in "+z+". 5+ lodgers for compensation, owner/manager on-site. "+
+      (isA?"Allowed.":"Special Use required.");
+    if(isGH)pw.cav.push({msg:"If residents are disabled persons (incl. SUD recovery), Group Home for Disabled Persons is the more specific use and controls per § 5.1.5. Boarding House is a secondary/fallback pathway.",cite:"§ 5.1.5",blocking:false});
+    pw.wf=isA?[...WF_ADMIN]:[...WF_SU];
+    if(isA){pw.rsk={nimby:"Low–Medium",escalation:"Low",timeline:"2–6 weeks",discretion:"Low",approval:"Low",fee:"$1,685–$3,955"};pw.rank="Good"}
+    else{pw.rsk={nimby:"Medium",escalation:"Medium",timeline:"3–6 months",discretion:"Moderate",approval:"Medium",fee:"$6,401+"};pw.rank="Moderate"}
+  });
+
+  // ──── INSTITUTION, PHILANTHROPIC ──────────────────────────────
+  tP("PHIL","Institution, Philanthropic","Not-for-profit charitable (no LDC cap)","philanthropic",999,(pw,perm)=>{
+    if(!nonprofit){pw.stops.push({msg:"Requires not-for-profit operator",cite:"§ 1.15 (def)"});return}
+    const isA=perm==="A";
+    pw.proc=isA?"Allowed — SDP review":"Special Use (§ 5.3.2)";
+    pw.rat="Institution, Philanthropic in "+z+". Not-for-profit charitable establishment. Alternate BH pathway with wider zone eligibility for nonprofit operators. "+
+      (isA?"Allowed.":"Special Use required.");
+    pw.cav.push({msg:"Interpretive risk: broad definition requires PCD Director concurrence that BH operation qualifies as 'philanthropic institution'",cite:"§ 1.15",blocking:true,resolve:"Request administrative determination ($415) from PCD before filing."});
+    pw.wf=isA?[...WF_ADMIN]:[...WF_SU];
+    if(isA){pw.rsk={nimby:"Low–Medium",escalation:"Low–Medium",timeline:"2–6 weeks + interp",discretion:"Moderate",approval:"Low–Medium",fee:"$1,685–$3,955 + $415 interp"};pw.rank="Moderate (interpretive)"}
+    else{pw.rsk={nimby:"Medium–High",escalation:"Medium",timeline:"3–6+ months",discretion:"Significant",approval:"Medium–High",fee:"$6,401+ + $415 interp"};pw.rank="Hard (interpretive)"}
+  });
+
+  // ──── EXISTING CONFORMING USE ─────────────────────────────────
+  const pNC={id:"NC",nm:"Existing conforming use",th:"Legally established + maintained",v:"no",mg:null,stops:[],cav:[...gC],proc:"No new app",rat:"",wf:[],rsk:{},rank:""};
+  if(exRC==="yes"&&mnt==="yes"){
+    pNC.v="yes";pNC.rat="Legally established and continuously maintained. Per § 5.6.2(A), pre-existing nonconforming use presumed to have required special use permit. Use may continue. Cannot change to different nonconforming use.";
+    pNC.cav.push({msg:"Enlargement of nonconforming use requires variance of use or special use (§ 5.6.4)",cite:"§ 5.6.4",blocking:false});
+    pNC.rsk={nimby:"Minimal",escalation:"Minimal",timeline:"Immediate",discretion:"None",approval:"Very low"};pNC.rank="Best (if applicable)";
+    pNC.wf=[{t:"Confirm legally established status with PCD"},{t:"Continue operations within existing scope"}];
+  } else if(exRC==="yes"&&mnt==="unknown"){
+    pNC.v="conditional";pNC.rat="Existing use confirmed, maintenance unverified.";
+    pNC.cav.push({msg:"1-year abandonment voids nonconforming status — only conforming uses may resume (§ 5.6.3)",cite:"§ 5.6.3",blocking:true,resolve:"Research via PCD records."});
+    pNC.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};pNC.rank="Investigate";
+    pNC.wf=[{t:"Research history with PCD"},{t:"Confirm continuous operation"}];
+  } else if(exRC==="yes"&&mnt==="no"){
+    pNC.stops.push({msg:"Abandoned 1+ year — nonconforming status lost (§ 5.6.3)",cite:"§ 5.6.3"});
+  } else {
+    pNC.stops.push({msg:"No existing group home or BH use on property",cite:"§ 5.6.2"});
+  }
+  if(pNC.stops.length)pNC.v="no";
+  R.push(pNC);
+
+  // ──── SP-03: Variance of Use fallback note ────────────────────
+  // Count how many pathways are blocked by zone eligibility alone
+  const zoneBlocked=R.filter(r=>r.v==="no"&&r.stops.some(s=>s.msg.startsWith("Not permitted in"))).length;
+  if(zoneBlocked>0){
+    // Add a global caveat about variance of use
+    gC.push({msg:"Variance of use (§ 5.3.3) available for uses not permitted in this zone — BoCC approval, exercised sparingly. Fee: $5,551. Not available in PUD.",cite:"§ 5.3.3",blocking:false,resolve:"Consult land use counsel before pursuing."});
+  }
+
+  return{zone:z,gS,gC,results:R,p2:"pass"};
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESULTS RENDERER (shared — handles all jurisdictions)
    ═══════════════════════════════════════════════════════════════════ */
 function renderRes(){
   const R=ST.results;if(R.error){APP.innerHTML=`<div><p style="color:#F09595;font-weight:500;">${R.error}</p><div class="btn-row"><button class="btn-secondary" onclick="ST.results=null;ST.pg=0;render()">Back</button></div></div>`;return}
@@ -1435,7 +2024,7 @@ function renderRes(){
   const viCo=R.results.filter(r=>r.v==="yes"||r.v==="conditional");
   const allC=[];viCo.forEach(r=>r.cav.forEach(c=>{if(!allC.find(x=>x.msg===c.msg))allC.push({...c,paths:viCo.filter(r2=>r2.cav.find(c2=>c2.msg===c.msg)).map(r2=>r2.nm)})}));
   const blk=allC.filter(c=>c.blocking).length;
-  const jurLabel=ST.jurisdiction==="denver"?"Denver":"Colorado Springs";
+  const jurLabel=ST.jurisdiction==="denver"?"Denver":ST.jurisdiction==="cos"?"Colorado Springs":"El Paso County";
   let h=`<div class="dash-header"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><div><p class="dash-title">${esc(ST.form.address)||"Analysis"}</p><p class="dash-sub">${R.zone}${ST.form.lotSize?" · "+ST.form.lotSize.toLocaleString()+" sf":""} · ${jurLabel}</p></div><button class="btn-secondary" onclick="resetState();ST.pg=0;render()" style="padding:6px 16px;font-size:12px;">New analysis</button></div></div>`;
   if(R.p2==="fail"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem;"><p style="font-size:14px;font-weight:500;color:#F09595;margin:0 0 4px;">All pathways blocked</p><p style="font-size:13px;color:#D87070;margin:0;">${R.gS.map(s=>s.msg+' <span class="cite">'+s.cite+"</span>").join("; ")}</p></div>`;h+=rFacts();APP.innerHTML=h;return}
   h+=`<div class="summary-row"><div class="stat-card"><p class="stat-label">Viable pathways</p><p class="stat-val green">${vi.length}</p></div><div class="stat-card"><p class="stat-label">Highest viable count</p><p class="stat-val">${bL}</p></div><div class="stat-card"><p class="stat-label">Open caveats</p><p class="stat-val ${blk>0?"amber":""}">${allC.length}${blk?" ("+blk+" blocking)":""}</p></div></div>`;
@@ -1463,9 +2052,6 @@ function pwC(r){
   return`<div class="pw-card"><div class="pw-card-head" data-id="${r.id}"><span class="pw-badge ${bc}">${bt}</span><span class="pw-name">${r.nm}</span><span class="pw-count">${ct}</span><span class="pw-arrow ${isO?"open":""}">&#9654;</span></div><div class="pw-detail ${isO?"open":""}">${d}</div></div>`;
 }
 render();
-
-// Register service worker for PWA / Add to Home Screen
-if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}
 </script>
 </body>
 </html>

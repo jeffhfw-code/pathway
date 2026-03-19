@@ -1,7 +1,7 @@
 {
   "name": "Pathway Analyzer — Innerstate Core",
   "short_name": "Pathway",
-  "description": "Zoning-entitlement pathway analyzer for Denver and Colorado Springs residential care facilities",
+  "description": "Zoning-entitlement pathway analyzer for Denver, Colorado Springs, and El Paso County residential care / behavioral health facilities",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0D0D14",
