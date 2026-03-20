@@ -1,3 +1,5 @@
+[Reading 2210 lines from start (total: 2210 lines, 0 remaining)]
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -310,7 +312,7 @@ input[type="checkbox"]{accent-color:#4A7FBF}
 </div>
 <div id="app"></div>
 <div class="footer">
-  <div class="footer-left"><span class="footer-dot"></span> Engine v14</div>
+  <div class="footer-left"><span class="footer-dot"></span> Engine v15</div>
   <div class="footer-right">DZC Art. 11 · COS UDC Ch. 7 · EPC LDC Ch. 5 · Source authority only</div>
 </div>
 <script>
@@ -659,11 +661,15 @@ let ST={
   results:null,activeTab:"dashboard",expanded:{},
   gisPhase:"idle",gisError:null,gisAddresses:null,gisData:null,gisAutoZone:null,gisAutoLot:null,gisAutoRC:null,gisAutoRC34:null,gisAutoDist34:null,gisOverrides:{},
   // COS GIS extras
-  cosAutoOverlays:[],cosAutoNNA:null,cosAutoAPZ:null,cosAutoFacilities:[],cosAutoALR:0,cosAutoCUP:[],cosAutoUV:[],cosAutoNearestFacDist:null,cosAutoNearestFacName:null,cosAutoNearestFacIsALR:false
+  cosAutoOverlays:[],cosAutoNNA:null,cosAutoAPZ:null,cosAutoFacilities:[],cosAutoALR:0,cosAutoCUP:[],cosAutoUV:[],cosAutoNearestFacDist:null,cosAutoNearestFacName:null,cosAutoNearestFacIsALR:false,
+  // EPC infrastructure check (water/sewer vs well/septic)
+  epcInfraStatus:null,    // "district" | "well-septic" | "unknown"
+  epcInfraDistrict:null,  // district name string if identified
+  epcInfraChecking:false  // true while async check is in progress
 };
 
 function resetState(keepJurisdiction){
-  ST={jurisdiction:keepJurisdiction?ST.jurisdiction:null,pg:0,form:{address:null,zone:null,lotSize:null,existingRC:null,maintained:null,religious:null,correctional:null,rcWithin1mi:null,rcType34within1mi:null,distType34:null,op24hr:null,overnight:null,licensing:null,fhaProtected:null,constructionType:null,fbzPermits:null,pdzPermits:null,targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],distGLRDetox:null,nearestAL:null,epcSexOffender:null,epcNonprofit:null,epcSeparation:null,epcCadO:null},results:null,activeTab:"dashboard",expanded:{},gisPhase:"idle",gisError:null,gisAddresses:null,gisData:null,gisAutoZone:null,gisAutoLot:null,gisAutoRC:null,gisAutoRC34:null,gisAutoDist34:null,gisOverrides:{},cosAutoOverlays:[],cosAutoNNA:null,cosAutoAPZ:null,cosAutoFacilities:[],cosAutoALR:0,cosAutoCUP:[],cosAutoUV:[],cosAutoNearestFacDist:null,cosAutoNearestFacName:null,cosAutoNearestFacIsALR:false};
+  ST={jurisdiction:keepJurisdiction?ST.jurisdiction:null,pg:0,form:{address:null,zone:null,lotSize:null,existingRC:null,maintained:null,religious:null,correctional:null,rcWithin1mi:null,rcType34within1mi:null,distType34:null,op24hr:null,overnight:null,licensing:null,fhaProtected:null,constructionType:null,fbzPermits:null,pdzPermits:null,targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],distGLRDetox:null,nearestAL:null,epcSexOffender:null,epcNonprofit:null,epcSeparation:null,epcCadO:null},results:null,activeTab:"dashboard",expanded:{},gisPhase:"idle",gisError:null,gisAddresses:null,gisData:null,gisAutoZone:null,gisAutoLot:null,gisAutoRC:null,gisAutoRC34:null,gisAutoDist34:null,gisOverrides:{},cosAutoOverlays:[],cosAutoNNA:null,cosAutoAPZ:null,cosAutoFacilities:[],cosAutoALR:0,cosAutoCUP:[],cosAutoUV:[],cosAutoNearestFacDist:null,cosAutoNearestFacName:null,cosAutoNearestFacIsALR:false,epcInfraStatus:null,epcInfraDistrict:null,epcInfraChecking:false};
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -953,6 +959,8 @@ async function epcGisRun(candidate){
       ST.form.epcCadO="none";
     }
     ST.gisPhase="done";render();
+    // Fire water/sewer infrastructure check (async, non-blocking)
+    epcWaterSewerCheck(candidate.attributes.Match_addr,lat,lon);
   }catch(err){ST.gisPhase="error";ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
 }
 
@@ -961,6 +969,122 @@ function epcGisApply(){
   if(ov.zone!==undefined)ST.form.zone=ov.zone||null;
   if(ov.lotSize!==undefined)ST.form.lotSize=ov.lotSize===""?null:Number(ov.lotSize);
   advance();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EPC WATER / SEWER INFRASTRUCTURE CHECK
+   Protocol: (1) CDSS well permit lookup by address → well found = private well
+             (2) Statewide parcel FeatureServer → subdivision name → district ID
+             (3) Known district map → confirm service area
+   ═══════════════════════════════════════════════════════════════════ */
+const EPC_INFRA_DISTRICTS={
+  // Subdivision name fragments → district name
+  // Woodmoor: east of I-25, County Line Rd to Higby Rd, 80132
+  WOODMOOR:     "Woodmoor Water & Sanitation District No. 1",
+  "VILLAGE CENTER @ WOODMOOR": "Woodmoor Water & Sanitation District No. 1",
+  "MISTY ACRES": "Woodmoor Water & Sanitation District No. 1",
+  "HIGBY":       "Woodmoor Water & Sanitation District No. 1",
+  "LAKE OF THE ROCKIES": "Woodmoor Water & Sanitation District No. 1",
+  // Triview: Monument area east of I-25, newer development
+  TRIVIEW:      "Triview Metropolitan District",
+  "JACKSON CREEK": "Triview Metropolitan District",
+  "REGENCY":    "Triview Metropolitan District",
+  "SANCTUARY POINTE": "Triview Metropolitan District",
+  "KING'S DEER": "Triview Metropolitan District",
+  // Security-Widefield: 80911, 80925
+  "SECURITY":   "Security-Widefield Water & Sanitation District",
+  "WIDEFIELD":  "Security-Widefield Water & Sanitation District",
+  "FOUNTAINVIEW": "Security-Widefield Water & Sanitation District",
+  "LORSON RANCH": "Security-Widefield Water & Sanitation District",
+  // Donala: Gleneagle / north Colorado Springs, 80921
+  GLENEAGLE:    "Donala Water & Sanitation District",
+  DONALA:       "Donala Water & Sanitation District",
+  "STRUTHERS":  "Donala Water & Sanitation District",
+  // Cherokee Metro: northwest unincorporated CS
+  CHEROKEE:     "Cherokee Metropolitan District",
+  // Monument Sanitation: Town of Monument proper
+  "MONUMENT LAKE": "Monument Sanitation District",
+  // Woodmen Hills: northeast, 80132
+  "WOODMEN HILLS": "Woodmen Hills Metropolitan District",
+};
+
+const EPC_CDSS_BASE="https://dwr.state.co.us/Rest/GET/api/v2";
+const EPC_PARCEL_FS="https://gis.colorado.gov/public/rest/services/Address_and_Parcel/Colorado_Public_Parcels/FeatureServer/0/query";
+
+async function epcWaterSewerCheck(addressStr,lat,lon){
+  ST.epcInfraStatus=null;ST.epcInfraDistrict=null;ST.epcInfraChecking=true;render();
+  try{
+    // Step 1: CDSS well permit lookup by house number
+    const houseNum=(addressStr.match(/^\d+/)||[""])[0];
+    let hasWell=false;
+    if(houseNum){
+      const cdssUrl=`${EPC_CDSS_BASE}/wellpermits/wellpermit?county=El+Paso&physicalAddress=${encodeURIComponent(houseNum)}&format=json&pageSize=50`;
+      const cdssRes=await fetch(cdssUrl);const cdssData=await cdssRes.json();
+      const wells=cdssData.ResultList||[];
+      // Match by street name words
+      const streetWords=addressStr.toUpperCase().replace(/\d+/,"").replace(/,.*$/,"").trim()
+        .split(/\s+/).filter(w=>w.length>3&&!["LANE","LN","ROAD","RD","DRIVE","DR","WAY","STREET","ST","AVE","AVENUE","BLVD","COURT","CT","CIRCLE","CIR"].includes(w));
+      for(const r of wells){
+        const addr=(r.physicalAddress||"").toUpperCase();
+        if(streetWords.some(w=>addr.includes(w))){hasWell=true;break}
+      }
+    }
+
+    if(hasWell){
+      // Private well confirmed — likely private septic too
+      ST.epcInfraStatus="well-septic";ST.epcInfraDistrict=null;ST.epcInfraChecking=false;render();return;
+    }
+
+    // Step 2: No well found — check statewide parcel layer for subdivision name
+    let subdivName=null;let districtName=null;
+    if(lat&&lon){
+      const parcelUrl=`${EPC_PARCEL_FS}?geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=situsAdd,legalDesc,subName,zoningCode&f=json`;
+      const parcelRes=await fetch(parcelUrl);const parcelData=await parcelRes.json();
+      if(parcelData.features&&parcelData.features.length>0){
+        const attr=parcelData.features[0].attributes;
+        // Try subName first, then parse from legalDesc
+        // Note: ArcGIS may return null as the string "null" — guard against that
+        const rawSubName=(attr.subName||"");
+        subdivName=(rawSubName&&rawSubName!=="null")?rawSubName.toUpperCase():"";
+        if(!subdivName){
+          const legal=(attr.legalDesc||"").toUpperCase();
+          // Extract subdivision name from legal desc
+          // Handles: "LOT 28  VILLAGE CENTER @ WOODMOOR FIL NO 2"
+          // Handles: "LOT 44  MISTY ACRES SUB FIL NO 3"
+          // Pattern: after LOT + number, capture until FIL/SUB/BLOCK/digit
+          const m=legal.match(/LOT\s+\S+\s+(.+?)(?:\s+(?:SUB|FIL|FILING|BLOCK|BLK)\b)/);
+          if(m)subdivName=m[1].trim();
+          else{
+            // Fallback: strip LOT+number prefix and FIL/SUB suffix
+            subdivName=legal.replace(/^LOT\s+\S+\s+/,"").replace(/\s+(SUB|FIL|FILING|BLOCK|BLK).*/,"").trim();
+          }
+        }
+        // Step 3: Match subdivision to known district
+        for(const [fragment,district] of Object.entries(EPC_INFRA_DISTRICTS)){
+          if(subdivName.includes(fragment)){districtName=district;break}
+        }
+        // If no direct match, try partial substring match on all keys
+        if(!districtName){
+          for(const [fragment,district] of Object.entries(EPC_INFRA_DISTRICTS)){
+            if(fragment.split(" ").some(word=>word.length>4&&subdivName.includes(word))){
+              districtName=district;break;
+            }
+          }
+        }
+      }
+    }
+
+    if(districtName){
+      ST.epcInfraStatus="district";ST.epcInfraDistrict=districtName;
+    } else if(!hasWell){
+      // No well found AND no district identified — likely district but unconfirmed
+      ST.epcInfraStatus="unknown";
+      ST.epcInfraDistrict=subdivName?`Subdivision: ${subdivName} — district not auto-identified. Confirm with El Paso County Assessor.`:null;
+    }
+  }catch(e){
+    ST.epcInfraStatus="unknown";ST.epcInfraDistrict="Lookup failed: "+e.message;
+  }
+  ST.epcInfraChecking=false;render();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1232,6 +1356,16 @@ function render(){
         h+=`<div class="auto-field"><span class="auto-label">Lot size</span><span class="auto-val">${gd.autoLot?gd.autoLot.toLocaleString()+" sf":"Not found"}<span class="auto-badge api">API</span></span></div>`;
         if(gd.parcelId)h+=`<div class="auto-field"><span class="auto-label">Parcel</span><span class="auto-val">${gd.parcelId}${gd.assessorLink?` <a href="${gd.assessorLink}" target="_blank" rel="noopener" style="color:#6EA4E8;font-size:11px;">Assessor &#8599;</a>`:""}</span></div>`;
         if(gd.autoOverlay)h+=`<div class="auto-field"><span class="auto-label">Overlay</span><span class="auto-val">${esc(gd.autoOverlay)}<span class="auto-badge api">API</span></span></div>`;
+        // Water/sewer infrastructure check row
+        if(ST.epcInfraChecking){
+          h+=`<div class="auto-field"><span class="auto-label">Water &amp; sewer</span><span class="auto-val"><span class="spinner"></span> Checking infrastructure…</span></div>`;
+        } else if(ST.epcInfraStatus==="district"){
+          h+=`<div class="auto-field"><span class="auto-label">Water &amp; sewer</span><span class="auto-val" style="color:#4ADE80;">&#10003; District-served — ${esc(ST.epcInfraDistrict)}<span class="auto-badge api">API</span></span></div>`;
+        } else if(ST.epcInfraStatus==="well-septic"){
+          h+=`<div class="auto-field"><span class="auto-label">Water &amp; sewer</span><span class="auto-val" style="color:#FBBF24;">&#9888; Private well &amp; septic — water/wastewater capacity limits apply<span class="auto-badge api">API</span></span></div>`;
+        } else if(ST.epcInfraStatus==="unknown"){
+          h+=`<div class="auto-field"><span class="auto-label">Water &amp; sewer</span><span class="auto-val" style="color:#9B9BA7;">Unknown — ${esc(ST.epcInfraDistrict||"confirm with El Paso County Assessor")}<span class="auto-badge api">API</span></span></div>`;
+        }
         h+=`</div></div>`;
         h+=`<details class="override-row"><summary>Override auto-populated values</summary><div class="override-grid">`;
         h+=`<div class="override-item"><label>Zone district</label><select id="ov-zone" onchange="ST.gisOverrides.zone=this.value"><option value="">— Use API value —</option>`;
@@ -1318,6 +1452,9 @@ function rFacts(){
     if(f.epcCadO==="cado")items.push(["CAD-O overlay","Yes — sub-zone TBD"]);
     items.push(["Existing use",f.existingRC||"\u2014"]);
     if(f.existingRC==="yes")items.push(["Maintained",f.maintained||"\u2014"]);
+    // Water/sewer infrastructure
+    const infraVal=ST.epcInfraStatus==="district"?"District-served"+(ST.epcInfraDistrict?" — "+ST.epcInfraDistrict:""):ST.epcInfraStatus==="well-septic"?"Private well & septic":ST.epcInfraStatus==="unknown"?"Unknown — verify with Assessor":"Not checked";
+    items.push(["Water & sewer",infraVal]);
   } else {
     items.push(["Correctional",f.correctional||"\u2014"],["FHA-protected",f.fhaProtected||"\u2014"],["24-hour",f.op24hr||"\u2014"]);
     if(f.targetOver60)items.push(["Over 60 population","Yes"]);
@@ -2029,7 +2166,25 @@ function renderRes(){
   if(R.p2==="fail"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem;"><p style="font-size:14px;font-weight:500;color:#F09595;margin:0 0 4px;">All pathways blocked</p><p style="font-size:13px;color:#D87070;margin:0;">${R.gS.map(s=>s.msg+' <span class="cite">'+s.cite+"</span>").join("; ")}</p></div>`;h+=rFacts();APP.innerHTML=h;return}
   h+=`<div class="summary-row"><div class="stat-card"><p class="stat-label">Viable pathways</p><p class="stat-val green">${vi.length}</p></div><div class="stat-card"><p class="stat-label">Highest viable count</p><p class="stat-val">${bL}</p></div><div class="stat-card"><p class="stat-label">Open caveats</p><p class="stat-val ${blk>0?"amber":""}">${allC.length}${blk?" ("+blk+" blocking)":""}</p></div></div>`;
   h+=`<div class="tab-row"><button class="tab-btn ${ST.activeTab==="dashboard"?"active":""}" onclick="ST.activeTab='dashboard';render()">Pathways</button><button class="tab-btn ${ST.activeTab==="caveats"?"active":""}" onclick="ST.activeTab='caveats';render()">Caveats (${allC.length})</button><button class="tab-btn ${ST.activeTab==="facts"?"active":""}" onclick="ST.activeTab='facts';render()">Site facts</button></div>`;
-  if(ST.activeTab==="dashboard"){if(vi.length)h+=`<p class="section-label">Viable</p>`+vi.map(pwC).join("");if(co.length)h+=`<p class="section-label">Conditional</p>`+co.map(pwC).join("");if(nv.length)h+=`<p class="section-label">Not viable</p>`+nv.map(pwC).join("")}
+  if(ST.activeTab==="dashboard"){
+    // EPC: show infrastructure card above pathways
+    if(ST.jurisdiction==="epc"&&ST.epcInfraStatus){
+      const isDistrict=ST.epcInfraStatus==="district";
+      const isWell=ST.epcInfraStatus==="well-septic";
+      const borderColor=isDistrict?"#1A3D28":isWell?"#5A4A20":"#2A2A3A";
+      const bgColor=isDistrict?"#0E1E14":isWell?"#2E2410":"#151520";
+      const iconColor=isDistrict?"#4ADE80":isWell?"#FBBF24":"#9B9BA7";
+      const icon=isDistrict?"&#10003;":isWell?"&#9888;":"&#8263;";
+      const label=isDistrict?"District Water &amp; Sewer":isWell?"Private Well &amp; Septic":"Water &amp; Sewer: Unknown";
+      const detail=isDistrict?(ST.epcInfraDistrict||"District-served"):isWell?"Property is on private well and septic system. Infrastructure capacity constraints apply — see water/wastewater analysis.":"Could not auto-determine infrastructure type. Verify with El Paso County Assessor or call the property's utility district directly.";
+      h+=`<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:12px 16px;margin-bottom:1.25rem;display:flex;align-items:flex-start;gap:10px;">`;
+      h+=`<span style="font-size:16px;color:${iconColor};flex-shrink:0;margin-top:1px;">${icon}</span>`;
+      h+=`<div><div style="font-size:13px;font-weight:500;color:${iconColor};margin-bottom:2px;">${label}</div>`;
+      h+=`<div style="font-size:12px;color:#9B9BA7;line-height:1.5;">${esc(detail)}</div>`;
+      if(isWell)h+=`<div style="font-size:11px;color:#555568;margin-top:4px;">Water supply and OWTS capacity may limit max bed count independent of zoning approval. Run water/wastewater analysis for this address.</div>`;
+      h+=`</div></div>`;
+    }
+    if(vi.length)h+=`<p class="section-label">Viable</p>`+vi.map(pwC).join("");if(co.length)h+=`<p class="section-label">Conditional</p>`+co.map(pwC).join("");if(nv.length)h+=`<p class="section-label">Not viable</p>`+nv.map(pwC).join("")}
   else if(ST.activeTab==="caveats"){if(!allC.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No open caveats on viable pathways.</p>`;else allC.forEach(c=>{h+=`<div class="caveat-card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span><span class="cite">${c.cite}</span></div><p class="caveat-title">${c.msg}</p><p class="caveat-meta"><strong>Affects:</strong> ${c.paths.join(", ")}</p>${c.resolve?`<p class="caveat-meta"><strong>Resolve:</strong> ${c.resolve}</p>`:""}</div>`})}
   else if(ST.activeTab==="facts")h+=rFacts();
   APP.innerHTML=h;document.querySelectorAll(".pw-card-head").forEach(el=>{el.onclick=()=>{const id=el.getAttribute("data-id");ST.expanded[id]=!ST.expanded[id];el.nextElementSibling.classList.toggle("open");el.querySelector(".pw-arrow").classList.toggle("open")}});
