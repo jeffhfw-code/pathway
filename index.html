@@ -1,5 +1,3 @@
-[Reading 2210 lines from start (total: 2210 lines, 0 remaining)]
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -312,7 +310,7 @@ input[type="checkbox"]{accent-color:#4A7FBF}
 </div>
 <div id="app"></div>
 <div class="footer">
-  <div class="footer-left"><span class="footer-dot"></span> Engine v15</div>
+  <div class="footer-left"><span class="footer-dot"></span> Engine v14</div>
   <div class="footer-right">DZC Art. 11 · COS UDC Ch. 7 · EPC LDC Ch. 5 · Source authority only</div>
 </div>
 <script>
@@ -1013,75 +1011,81 @@ const EPC_PARCEL_FS="https://gis.colorado.gov/public/rest/services/Address_and_P
 
 async function epcWaterSewerCheck(addressStr,lat,lon){
   ST.epcInfraStatus=null;ST.epcInfraDistrict=null;ST.epcInfraChecking=true;render();
+  console.log("[INFRA] Starting check for:",addressStr,"lat:",lat,"lon:",lon);
   try{
     // Step 1: CDSS well permit lookup by house number
     const houseNum=(addressStr.match(/^\d+/)||[""])[0];
     let hasWell=false;
     if(houseNum){
       const cdssUrl=`${EPC_CDSS_BASE}/wellpermits/wellpermit?county=El+Paso&physicalAddress=${encodeURIComponent(houseNum)}&format=json&pageSize=50`;
+      console.log("[INFRA] CDSS URL:",cdssUrl);
       const cdssRes=await fetch(cdssUrl);const cdssData=await cdssRes.json();
       const wells=cdssData.ResultList||[];
-      // Match by street name words
+      console.log("[INFRA] CDSS wells returned:",wells.length);
       const streetWords=addressStr.toUpperCase().replace(/\d+/,"").replace(/,.*$/,"").trim()
         .split(/\s+/).filter(w=>w.length>3&&!["LANE","LN","ROAD","RD","DRIVE","DR","WAY","STREET","ST","AVE","AVENUE","BLVD","COURT","CT","CIRCLE","CIR"].includes(w));
+      console.log("[INFRA] Street words for matching:",streetWords);
       for(const r of wells){
         const addr=(r.physicalAddress||"").toUpperCase();
-        if(streetWords.some(w=>addr.includes(w))){hasWell=true;break}
+        if(streetWords.some(w=>addr.includes(w))){hasWell=true;console.log("[INFRA] Well match found:",r.physicalAddress,r.permit);break}
       }
     }
 
     if(hasWell){
-      // Private well confirmed — likely private septic too
+      console.log("[INFRA] Result: well-septic");
       ST.epcInfraStatus="well-septic";ST.epcInfraDistrict=null;ST.epcInfraChecking=false;render();return;
     }
 
     // Step 2: No well found — check statewide parcel layer for subdivision name
-    let subdivName=null;let districtName=null;
+    let subdivName="";let districtName=null;
     if(lat&&lon){
       const parcelUrl=`${EPC_PARCEL_FS}?geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=situsAdd,legalDesc,subName,zoningCode&f=json`;
+      console.log("[INFRA] Parcel URL:",parcelUrl);
       const parcelRes=await fetch(parcelUrl);const parcelData=await parcelRes.json();
+      console.log("[INFRA] Parcel features:",parcelData.features?.length||0);
       if(parcelData.features&&parcelData.features.length>0){
         const attr=parcelData.features[0].attributes;
-        // Try subName first, then parse from legalDesc
-        // Note: ArcGIS may return null as the string "null" — guard against that
+        console.log("[INFRA] Parcel attributes:",JSON.stringify(attr));
         const rawSubName=(attr.subName||"");
         subdivName=(rawSubName&&rawSubName!=="null")?rawSubName.toUpperCase():"";
         if(!subdivName){
           const legal=(attr.legalDesc||"").toUpperCase();
-          // Extract subdivision name from legal desc
-          // Handles: "LOT 28  VILLAGE CENTER @ WOODMOOR FIL NO 2"
-          // Handles: "LOT 44  MISTY ACRES SUB FIL NO 3"
-          // Pattern: after LOT + number, capture until FIL/SUB/BLOCK/digit
+          console.log("[INFRA] Legal desc:",legal);
           const m=legal.match(/LOT\s+\S+\s+(.+?)(?:\s+(?:SUB|FIL|FILING|BLOCK|BLK)\b)/);
-          if(m)subdivName=m[1].trim();
+          if(m){subdivName=m[1].trim();console.log("[INFRA] Regex extracted subdiv:",subdivName);}
           else{
-            // Fallback: strip LOT+number prefix and FIL/SUB suffix
             subdivName=legal.replace(/^LOT\s+\S+\s+/,"").replace(/\s+(SUB|FIL|FILING|BLOCK|BLK).*/,"").trim();
+            console.log("[INFRA] Fallback subdiv:",subdivName);
           }
+        } else {
+          console.log("[INFRA] subName field:",subdivName);
         }
         // Step 3: Match subdivision to known district
         for(const [fragment,district] of Object.entries(EPC_INFRA_DISTRICTS)){
-          if(subdivName.includes(fragment)){districtName=district;break}
+          if(subdivName.includes(fragment)){districtName=district;console.log("[INFRA] District match:",fragment,"->",district);break}
         }
-        // If no direct match, try partial substring match on all keys
         if(!districtName){
+          console.log("[INFRA] No direct match, trying word match on:",subdivName);
           for(const [fragment,district] of Object.entries(EPC_INFRA_DISTRICTS)){
             if(fragment.split(" ").some(word=>word.length>4&&subdivName.includes(word))){
-              districtName=district;break;
+              districtName=district;console.log("[INFRA] Word match:",fragment,"->",district);break;
             }
           }
         }
+        if(!districtName)console.log("[INFRA] No district match found for subdiv:",subdivName);
       }
     }
 
     if(districtName){
+      console.log("[INFRA] Result: district —",districtName);
       ST.epcInfraStatus="district";ST.epcInfraDistrict=districtName;
-    } else if(!hasWell){
-      // No well found AND no district identified — likely district but unconfirmed
+    } else {
+      console.log("[INFRA] Result: unknown. subdivName was:",subdivName);
       ST.epcInfraStatus="unknown";
       ST.epcInfraDistrict=subdivName?`Subdivision: ${subdivName} — district not auto-identified. Confirm with El Paso County Assessor.`:null;
     }
   }catch(e){
+    console.error("[INFRA] Error:",e);
     ST.epcInfraStatus="unknown";ST.epcInfraDistrict="Lookup failed: "+e.message;
   }
   ST.epcInfraChecking=false;render();
