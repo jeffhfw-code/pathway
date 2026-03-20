@@ -9,6 +9,7 @@ function setR(k,v){ST.form[k]=v;render()}
 function r2(k,v){return`<button class="radio-btn ${v==="yes"?"sel":""}" onclick="setR('${k}','yes')">Yes</button><button class="radio-btn ${v==="no"?"sel":""}" onclick="setR('${k}','no')">No</button>`}
 function r3(k,v){return`<button class="radio-btn ${v==="yes"?"sel":""}" onclick="setR('${k}','yes')">Yes</button><button class="radio-btn ${v==="no"?"sel":""}" onclick="setR('${k}','no')">No</button><button class="radio-btn ${v==="unknown"?"sel":""}" onclick="setR('${k}','unknown')">Unknown</button>`}
 function esc(s){return(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")}
+function citeLink(cite){const url=citeURL(cite,ST.jurisdiction);return url?`<a class="cite" href="${url}" target="_blank" rel="noopener">${cite}</a>`:`<span class="cite">${cite}</span>`}
 
 /* ═══════════════════════════════════════════════════════════════════
    WIZARD PAGES
@@ -20,11 +21,16 @@ function getPages(){
   return getCOSPages();
 }
 
+/* Page-to-form-key map for skipping defaulted pages */
+const PAGE_KEY_MAP={licensing:"licensing",correctional:"correctional",op24hr:"op24hr",overnight:"overnight",epcSexOffender:"epcSexOffender",epcNonprofit:"epcNonprofit"};
+function skipPage(id){const k=PAGE_KEY_MAP[id];return k&&FORM_DEFAULTS[k]!==undefined}
+function addIf(p,id){if(!skipPage(id))p.push({id})}
+
 function getDenverPages(){
   const p=[{id:"addressLookup"},{id:"zone"}];const z=ST.form.zone;if(!z)return p;
   const ut=UT[z];if(!ut)return p;
   if(ut.t1==="NP"&&ut.t2==="NP"&&ut.t3==="NP"&&ut.t4==="NP"){p.push({id:"allNP"});return p}
-  p.push({id:"licensing"},{id:"correctional"},{id:"op24hr"},{id:"overnight"});
+  addIf(p,"licensing");addIf(p,"correctional");addIf(p,"op24hr");addIf(p,"overnight");
   if(ut.t1!=="NP")p.push({id:"religious"});
   p.push({id:"existingRC"});
   if(ST.form.existingRC==="yes")p.push({id:"maintained"});
@@ -41,11 +47,11 @@ function getCOSPages(){
   // Check if anything is permitted at all
   const allN=Object.values(ut).every(v=>v==="N");
   if(allN){p.push({id:"allNP"});return p}
-  p.push({id:"licensing"},{id:"correctional"},{id:"cosFHA"});
+  addIf(p,"licensing");addIf(p,"correctional");p.push({id:"cosFHA"});
   // If FBZ or PDZ, ask about plan
   if(z==="FBZ")p.push({id:"cosFBZ"});
   if(z==="PDZ")p.push({id:"cosPDZ"});
-  p.push({id:"op24hr"});
+  addIf(p,"op24hr");
   // Population-specific questions
   p.push({id:"cosPopulation"});
   // Separation — only matters for GLR/Detox pathways
@@ -66,13 +72,13 @@ function getEPCPages(){
   const allN=Object.values(ut).every(v=>v==="N");
   if(allN){p.push({id:"allNP"});return p}
   // Site facts — engine tests all 16 pathways against these inputs
-  p.push({id:"licensing"});
-  p.push({id:"correctional"});
-  p.push({id:"epcSexOffender"});
-  p.push({id:"op24hr"});
-  p.push({id:"overnight"});
+  addIf(p,"licensing");
+  addIf(p,"correctional");
+  addIf(p,"epcSexOffender");
+  addIf(p,"op24hr");
+  addIf(p,"overnight");
   // Nonprofit — gates philanthropic pathway
-  if(ut.philanthropic!=="N"||ut.rehab!=="N")p.push({id:"epcNonprofit"});
+  if(ut.philanthropic!=="N"||ut.rehab!=="N")addIf(p,"epcNonprofit");
   // Separation — only relevant if GH permitted in this zone AND zone is not commercial
   if(ut.gh==="A4"&&!epcIsCommercial(z))p.push({id:"epcSeparation"});
   // CAD-O: auto-determined by GIS overlay query — no intake page needed
@@ -89,6 +95,9 @@ function goBack(){if(ST.pg>0){ST.pg--;render()}}
    RENDER — MAIN ROUTER
    ═══════════════════════════════════════════════════════════════════ */
 function render(){
+  if(ST.showSaved){renderSavedList();return}
+  if(ST.showCompare){renderComparison();return}
+  if(ST.showGlossary){renderGlossary();return}
   if(ST.results){renderRes();return}
   const pages=getPages();ST.pg=Math.min(ST.pg,pages.length-1);const pg=ST.pg;const page=pages[pg];const f=ST.form;
   // Progress dots (skip for jurisdiction page)
@@ -364,6 +373,13 @@ function render(){
         } else if(ST.epcInfraStatus==="unknown"){
           h+=`<div class="auto-field"><span class="auto-label">Water &amp; sewer</span><span class="auto-val" style="color:#9B9BA7;">Unknown — ${esc(ST.epcInfraDistrict||"confirm with El Paso County Assessor")}<span class="auto-badge api">API</span></span></div>`;
         }
+        // CDPHE licensed facilities within 1 mile
+        if(ST.epcAutoFacilities.length>0){
+          h+=`<div class="auto-field"><span class="auto-label">Licensed facilities within 1 mi</span><span class="auto-val">${ST.epcAutoFacilities.length}<span class="auto-badge api">CDPHE</span></span></div>`;
+          if(ST.epcAutoNearestFacName)h+=`<div class="auto-field"><span class="auto-label">Nearest licensed facility</span><span class="auto-val">${esc(ST.epcAutoNearestFacName)} — ${ST.epcAutoNearestFacDist.toLocaleString()} ft<span class="auto-badge api">CDPHE</span></span></div>`;
+        } else {
+          h+=`<div class="auto-field"><span class="auto-label">Licensed facilities within 1 mi</span><span class="auto-val">None found<span class="auto-badge api">CDPHE</span></span></div>`;
+        }
         h+=`</div></div>`;
         h+=`<details class="override-row"><summary>Override auto-populated values</summary><div class="override-grid">`;
         h+=`<div class="override-item"><label>Zone district</label><select id="ov-zone" onchange="ST.gisOverrides.zone=this.value"><option value="">— Use API value —</option>`;
@@ -371,7 +387,7 @@ function render(){
         h+=`</select></div>`;
         h+=`<div class="override-item"><label>Lot size (sf)</label><input type="number" id="ov-lot" value="${ST.gisOverrides.lotSize||""}" placeholder="${gd.autoLot||"Enter value"}" onchange="ST.gisOverrides.lotSize=this.value"></div>`;
         h+=`</div></details>`;
-        h+=`<div class="data-caveats">Zone from EPC ZoningAreas layer; lot size from Parcels layer (Shape.STArea in CO State Plane ft\u00B2); jurisdiction from IncorporatedCities layer. Verify with PCD.</div>`;
+        h+=`<div class="data-caveats">Zone from EPC ZoningAreas layer; lot size from Parcels layer (Shape.STArea in CO State Plane ft²); jurisdiction from IncorporatedCities layer. CDPHE layer shows state-licensed facilities only — the 500 ft separation rule (§ 5.2.17(A)) measures to group homes, family care homes, and child care centers, not all of which appear in CDPHE data. Verify with PCD.</div>`;
         h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="epcGisApply()">Accept and continue</button></div>`;
       }
       APP.innerHTML=h;
@@ -458,6 +474,7 @@ function rFacts(){
     if(f.existingRC==="yes")items.push(["Maintained",f.maintained||"\u2014"]);
     if(f.cosOverlays?.length)items.push(["Overlays",f.cosOverlays.join(", ")]);
   }
+  items.push(["Engine verified",ENGINE_VERIFIED[ST.jurisdiction]||"\u2014"]);
   let h=`<div class="facts-grid">`;items.forEach(([l,v])=>{h+=`<div class="fact-item"><div class="fact-label">${l}</div><div class="fact-val">${v}</div></div>`});return h+`</div>`;
 }
 
@@ -471,7 +488,9 @@ function go(){
   if(ST.jurisdiction==="denver")ST.results=runEngine(ST.form);
   else if(ST.jurisdiction==="epc")ST.results=runEPCEngine(ST.form);
   else ST.results=runCOSEngine(ST.form);
-  ST.activeTab="dashboard";ST.expanded={};render();
+  ST.activeTab="dashboard";ST.expanded={};ST.checklistState={};
+  history.replaceState(null,"",stateToHash());
+  render();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -486,10 +505,12 @@ function renderRes(){
   const allC=[];viCo.forEach(r=>r.cav.forEach(c=>{if(!allC.find(x=>x.msg===c.msg))allC.push({...c,paths:viCo.filter(r2=>r2.cav.find(c2=>c2.msg===c.msg)).map(r2=>r2.nm)})}));
   const blk=allC.filter(c=>c.blocking).length;
   const jurLabel=ST.jurisdiction==="denver"?"Denver":ST.jurisdiction==="cos"?"Colorado Springs":"El Paso County";
-  let h=`<div class="dash-header"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><div><p class="dash-title">${esc(ST.form.address)||"Analysis"}</p><p class="dash-sub">${R.zone}${ST.form.lotSize?" · "+ST.form.lotSize.toLocaleString()+" sf":""} · ${jurLabel}</p></div><button class="btn-secondary" onclick="resetState();ST.pg=0;render()" style="padding:6px 16px;font-size:12px;">New analysis</button></div></div>`;
-  if(R.p2==="fail"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem;"><p style="font-size:14px;font-weight:500;color:#F09595;margin:0 0 4px;">All pathways blocked</p><p style="font-size:13px;color:#D87070;margin:0;">${R.gS.map(s=>s.msg+' <span class="cite">'+s.cite+"</span>").join("; ")}</p></div>`;h+=rFacts();APP.innerHTML=h;return}
+  let h=`<div class="dash-header"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><div><p class="dash-title">${esc(ST.form.address)||"Analysis"}</p><p class="dash-sub">${R.zone}${ST.form.lotSize?" · "+ST.form.lotSize.toLocaleString()+" sf":""} · ${jurLabel}</p></div><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn-secondary" onclick="shareURL()" style="padding:6px 12px;font-size:12px;">Share</button><button class="btn-secondary" onclick="doSave()" style="padding:6px 12px;font-size:12px;">Save</button><button class="btn-secondary" onclick="window.print()" style="padding:6px 12px;font-size:12px;">Print / PDF</button><button class="btn-secondary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()" style="padding:6px 12px;font-size:12px;">New analysis</button></div></div></div>`;
+  // Change monitoring banner
+  const _vd=ENGINE_VERIFIED[ST.jurisdiction];if(_vd){const _ds=Math.floor((Date.now()-new Date(_vd).getTime())/864e5);if(_ds>90)h+=`<div style="background:#2E2410;border:1px solid #5A4A20;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:12px;color:#FBBF24;">&#9888; Engine rules last verified ${_ds} days ago (${_vd}). Code changes may have occurred. Review before relying on results.</div>`}
+  if(R.p2==="fail"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem;"><p style="font-size:14px;font-weight:500;color:#F09595;margin:0 0 4px;">All pathways blocked</p><p style="font-size:13px;color:#D87070;margin:0;">${R.gS.map(s=>s.msg+" "+citeLink(s.cite)).join("; ")}</p></div>`;h+=rFacts();APP.innerHTML=h;return}
   h+=`<div class="summary-row"><div class="stat-card"><p class="stat-label">Viable pathways</p><p class="stat-val green">${vi.length}</p></div><div class="stat-card"><p class="stat-label">Highest viable count</p><p class="stat-val">${bL}</p></div><div class="stat-card"><p class="stat-label">Open caveats</p><p class="stat-val ${blk>0?"amber":""}">${allC.length}${blk?" ("+blk+" blocking)":""}</p></div></div>`;
-  h+=`<div class="tab-row"><button class="tab-btn ${ST.activeTab==="dashboard"?"active":""}" onclick="ST.activeTab='dashboard';render()">Pathways</button><button class="tab-btn ${ST.activeTab==="caveats"?"active":""}" onclick="ST.activeTab='caveats';render()">Caveats (${allC.length})</button><button class="tab-btn ${ST.activeTab==="facts"?"active":""}" onclick="ST.activeTab='facts';render()">Site facts</button></div>`;
+  h+=`<div class="tab-row"><button class="tab-btn ${ST.activeTab==="dashboard"?"active":""}" onclick="ST.activeTab='dashboard';render()">Pathways</button><button class="tab-btn ${ST.activeTab==="caveats"?"active":""}" onclick="ST.activeTab='caveats';render()">Caveats (${allC.length})</button><button class="tab-btn ${ST.activeTab==="costs"?"active":""}" onclick="ST.activeTab='costs';render()">Costs</button><button class="tab-btn ${ST.activeTab==="checklist"?"active":""}" onclick="ST.activeTab='checklist';render()">Checklist</button><button class="tab-btn ${ST.activeTab==="facts"?"active":""}" onclick="ST.activeTab='facts';render()">Site facts</button></div>`;
   if(ST.activeTab==="dashboard"){
     // EPC: show infrastructure card above pathways
     if(ST.jurisdiction==="epc"&&ST.epcInfraStatus){
@@ -509,7 +530,55 @@ function renderRes(){
       h+=`</div></div>`;
     }
     if(vi.length)h+=`<p class="section-label">Viable</p>`+vi.map(pwC).join("");if(co.length)h+=`<p class="section-label">Conditional</p>`+co.map(pwC).join("");if(nv.length)h+=`<p class="section-label">Not viable</p>`+nv.map(pwC).join("")}
-  else if(ST.activeTab==="caveats"){if(!allC.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No open caveats on viable pathways.</p>`;else allC.forEach(c=>{h+=`<div class="caveat-card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span><span class="cite">${c.cite}</span></div><p class="caveat-title">${c.msg}</p><p class="caveat-meta"><strong>Affects:</strong> ${c.paths.join(", ")}</p>${c.resolve?`<p class="caveat-meta"><strong>Resolve:</strong> ${c.resolve}</p>`:""}</div>`})}
+  else if(ST.activeTab==="caveats"){if(!allC.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No open caveats on viable pathways.</p>`;else allC.forEach(c=>{h+=`<div class="caveat-card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span>${citeLink(c.cite)}</div><p class="caveat-title">${c.msg}</p><p class="caveat-meta"><strong>Affects:</strong> ${c.paths.join(", ")}</p>${c.resolve?`<p class="caveat-meta"><strong>Resolve:</strong> ${c.resolve}</p>`:""}</div>`})}
+  else if(ST.activeTab==="costs"){
+    h+=`<p class="section-label">Cost Estimates by Viable Pathway</p>`;
+    if(!viCo.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No viable or conditional pathways.</p>`;
+    else{
+      viCo.forEach(r=>{
+        h+=`<div style="background:#151520;border:1px solid #2A2A3A;border-radius:10px;padding:14px 16px;margin-bottom:10px;">`;
+        h+=`<div style="font-size:14px;font-weight:500;color:#E8E8EC;margin-bottom:8px;">${esc(r.nm)}</div>`;
+        h+=`<table style="width:100%;border-collapse:collapse;font-size:12px;">`;
+        // Extract fee from rsk if available
+        const fee=r.rsk.fee;
+        if(fee){
+          h+=`<tr><td style="padding:4px 0;color:#9B9BA7;">Application fee</td><td style="padding:4px 0;text-align:right;color:#E8E8EC;">${fee}</td></tr>`;
+        }
+        // Timeline from rsk
+        const tl=r.rsk.timeline;
+        if(tl){
+          h+=`<tr><td style="padding:4px 0;color:#9B9BA7;">Estimated timeline</td><td style="padding:4px 0;text-align:right;color:#E8E8EC;">${tl}</td></tr>`;
+        }
+        h+=`</table></div>`;
+      });
+      h+=`<p class="section-label" style="margin-top:16px;">Ancillary Costs (may apply)</p>`;
+      h+=`<table style="width:100%;border-collapse:collapse;font-size:12px;">`;
+      Object.values(ANCILLARY_COSTS).forEach(c=>{
+        h+=`<tr style="border-bottom:1px solid #1E1E2E;"><td style="padding:8px 0;color:#9B9BA7;">${c.label}</td><td style="padding:8px 0;text-align:right;color:#E8E8EC;white-space:nowrap;">$${c.min.toLocaleString()} – $${c.max.toLocaleString()}</td></tr>`;
+      });
+      h+=`</table>`;
+      h+=`<div style="margin-top:12px;font-size:11px;color:#555568;line-height:1.5;">Estimates are approximate ranges based on published fee schedules and typical professional service costs. Actual costs vary by project scope, site conditions, and jurisdiction requirements. Always confirm current fees with the applicable planning department.</div>`;
+    }
+  }
+  else if(ST.activeTab==="checklist"){
+    h+=`<p class="section-label">Application Checklist by Viable Pathway</p>`;
+    if(!viCo.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No viable or conditional pathways.</p>`;
+    else{
+      viCo.forEach(r=>{
+        const docs=getPathwayDocs(r);
+        h+=`<div style="background:#151520;border:1px solid #2A2A3A;border-radius:10px;padding:14px 16px;margin-bottom:10px;">`;
+        h+=`<div style="font-size:14px;font-weight:500;color:#E8E8EC;margin-bottom:8px;">${esc(r.nm)} <span style="font-size:11px;color:#6B6B78;">(${r.proc})</span></div>`;
+        docs.forEach((d,i)=>{
+          const ck=ST.checklistState[r.id+"_"+i]||false;
+          h+=`<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;padding:4px 0;cursor:pointer;color:${ck?"#555568":"#E8E8EC"};${ck?"text-decoration:line-through":""};">`;
+          h+=`<input type="checkbox" ${ck?"checked":""} onchange="ST.checklistState['${r.id}_${i}']=this.checked;render()" style="margin-top:2px;">`;
+          h+=`<span>${d.name}${d.required?"":" <em style='color:#6B6B78;'>(if applicable)</em>"}</span></label>`;
+        });
+        h+=`</div>`;
+      });
+      h+=`<div style="margin-top:12px;font-size:11px;color:#555568;line-height:1.5;">Checklist items are based on standard submittal requirements. Specific jurisdictions may require additional documents. Confirm with the applicable planning department before filing.</div>`;
+    }
+  }
   else if(ST.activeTab==="facts")h+=rFacts();
   APP.innerHTML=h;document.querySelectorAll(".pw-card-head").forEach(el=>{el.onclick=()=>{const id=el.getAttribute("data-id");ST.expanded[id]=!ST.expanded[id];el.nextElementSibling.classList.toggle("open");el.querySelector(".pw-arrow").classList.toggle("open")}});
 }
@@ -525,10 +594,182 @@ function pwC(r){
     const rl={nimby:"NIMBY",escalation:"Escalation",timeline:"Timeline",discretion:"Discretion",approval:"Approval",clock:"Review clock",fee:"Fee"};
     Object.entries(r.rsk).forEach(([k,v])=>{d+=`<div class="risk-item"><div class="risk-label">${rl[k]||k}</div><div class="risk-val">${v}</div></div>`});
     d+=`</div></div>`;
-    if(r.cav.length){d+=`<div class="detail-section"><div class="detail-heading">Caveats (${r.cav.length})</div>`;r.cav.forEach(c=>{d+=`<div style="margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span> <span style="font-size:13px;color:#9B9BA7;">${c.msg}</span> <span class="cite">${c.cite}</span></div>`});d+=`</div>`}
+    if(r.cav.length){d+=`<div class="detail-section"><div class="detail-heading">Caveats (${r.cav.length})</div>`;r.cav.forEach(c=>{d+=`<div style="margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span> <span style="font-size:13px;color:#9B9BA7;">${c.msg}</span> ${citeLink(c.cite)}</div>`});d+=`</div>`}
     d+=`<div class="detail-section"><div class="detail-heading">Assessment</div><p class="detail-text"><strong>${r.rank}</strong>${r.proc?" · "+r.proc:""}</p></div>`;
-  } else {d+=`<div class="detail-section"><div class="detail-heading">Why not viable</div>`;r.stops.forEach(s=>{d+=`<div style="margin-bottom:6px;"><span class="stop-pill stop-hard">Hard stop</span> <span style="font-size:13px;color:#9B9BA7;">${s.msg}</span> <span class="cite">${s.cite}</span></div>`});d+=`</div>`}
+  } else {d+=`<div class="detail-section"><div class="detail-heading">Why not viable</div>`;r.stops.forEach(s=>{d+=`<div style="margin-bottom:6px;"><span class="stop-pill stop-hard">Hard stop</span> <span style="font-size:13px;color:#9B9BA7;">${s.msg}</span> ${citeLink(s.cite)}</div>`});d+=`</div>`}
   return`<div class="pw-card"><div class="pw-card-head" data-id="${r.id}"><span class="pw-badge ${bc}">${bt}</span><span class="pw-name">${r.nm}</span><span class="pw-count">${ct}</span><span class="pw-arrow ${isO?"open":""}">&#9654;</span></div><div class="pw-detail ${isO?"open":""}">${d}</div></div>`;
 }
 
-render();
+/* ═══════════════════════════════════════════════════════════════════
+   CHECKLIST DOCUMENTS (F9)
+   ═══════════════════════════════════════════════════════════════════ */
+function getPathwayDocs(r){
+  const docs=[];const jur=ST.jurisdiction;const proc=r.proc||"";
+  // Common to all
+  docs.push({name:"Completed application form",required:true});
+  if(jur==="denver"){
+    docs.push({name:"Zoning permit application",required:true});
+    if(proc.includes("ZPCIM")){
+      docs.push({name:"Community Information Meeting summary & sign-in sheet",required:true});
+      docs.push({name:"CIM notification proof (21-day, 400-ft radius)",required:true});
+    }
+    docs.push({name:"Site plan / floor plan",required:true});
+    docs.push({name:"Copy of state license or certification",required:true});
+    docs.push({name:"Operational plan (staffing, hours, population served)",required:true});
+    if(ST.form.correctional==="yes")docs.push({name:"DPS referral documentation",required:true});
+    docs.push({name:"Property ownership documentation",required:true});
+    docs.push({name:"Proof of insurance",required:false});
+  } else if(jur==="cos"){
+    if(proc.includes("CUP")){
+      docs.push({name:"Conditional Use Permit application ($1,445)",required:true});
+      docs.push({name:"Development Plan (if new construction or conversion)",required:proc.includes("Dev Plan")});
+      docs.push({name:"Site posting photo documentation",required:true});
+      docs.push({name:"Neighbor notification postcards proof",required:true});
+    } else {
+      docs.push({name:"HSE / GLR administrative application ($175)",required:true});
+    }
+    docs.push({name:"Vicinity map",required:true});
+    docs.push({name:"Site plan with dimensions",required:true});
+    docs.push({name:"Written description of proposed use",required:true});
+    docs.push({name:"Copy of state license or certification",required:true});
+    docs.push({name:"Floor plan showing bed count and common areas",required:true});
+    docs.push({name:"Proof of property ownership or lease",required:true});
+  } else if(jur==="epc"){
+    if(proc.includes("Special Use")){
+      docs.push({name:"Special Use application ($6,401)",required:true});
+      docs.push({name:"Adjacent owner notification documentation",required:true});
+      docs.push({name:"FHAA reasonable accommodation documentation",required:r.id.startsWith("GH")});
+    } else {
+      docs.push({name:"Group Home Permit application ($192)",required:r.id.startsWith("GH")});
+      docs.push({name:"Site Development Plan application ($1,685–$3,955)",required:!r.id.startsWith("GH")});
+    }
+    docs.push({name:"Residential site plan ($165)",required:r.id.startsWith("GH")});
+    docs.push({name:"Copy of all applicable state licenses",required:true});
+    docs.push({name:"Floor plan showing bedrooms and common areas",required:true});
+    docs.push({name:"Proof of property ownership or lease",required:true});
+    docs.push({name:"Fire code compliance documentation",required:false});
+    docs.push({name:"Water/wastewater capacity documentation (if well/septic)",required:ST.epcInfraStatus==="well-septic"});
+  }
+  return docs;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SAVE ANALYSIS (F5)
+   ═══════════════════════════════════════════════════════════════════ */
+function doSave(){
+  if(!ST.results||ST.results.error)return;
+  const R=ST.results;
+  const vi=R.results.filter(r=>r.v==="yes");
+  let best=0;vi.forEach(r=>{const n=r.mg===999?9999:(r.mg||0);if(n>best)best=n});
+  const blk=R.results.filter(r=>r.v==="conditional").length;
+  saveAnalysis({viableCount:vi.length,maxBeds:best,blockerCount:blk});
+  const t=document.createElement("div");
+  t.textContent="Analysis saved!";
+  t.style.cssText="position:fixed;top:16px;right:16px;background:#1A3D28;color:#4ADE80;padding:8px 16px;border-radius:8px;font-size:13px;z-index:9999;";
+  document.body.appendChild(t);setTimeout(()=>t.remove(),2000);
+}
+
+function renderSavedList(){
+  const list=savedAnalyses();
+  let h=`<p class="q-title">Saved Analyses</p>`;
+  if(!list.length){h+=`<p style="font-size:13px;color:#9B9BA7;">No saved analyses yet. Run an analysis and click "Save" to store it.</p>`;h+=`<div class="btn-row"><button class="btn-secondary" onclick="ST.showSaved=false;render()">Back to analysis</button></div>`;APP.innerHTML=h;return}
+  if(!ST.compareIds)ST.compareIds=[];
+  const canCompare=ST.compareIds.length>=2&&ST.compareIds.length<=4;
+  h+=`<p style="font-size:13px;color:#9B9BA7;margin-bottom:12px;">Select 2\u20134 analyses to compare side by side.</p>`;
+  if(canCompare)h+=`<div style="margin-bottom:12px;"><button class="btn-primary" onclick="ST.showSaved=false;ST.showCompare=true;render()" style="padding:8px 20px;">Compare (${ST.compareIds.length})</button></div>`;
+  list.forEach(a=>{
+    const d=new Date(a.ts);const ds=d.toLocaleDateString()+" "+d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    const jurN=a.jurisdiction==="denver"?"Denver":a.jurisdiction==="cos"?"COS":"EPC";
+    const isChecked=ST.compareIds.includes(a.id);
+    h+=`<div style="background:#151520;border:1px solid #2A2A3A;border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">`;
+    h+=`<input type="checkbox" ${isChecked?"checked":""} onchange="toggleCompare('${a.id}')" style="flex-shrink:0;width:18px;height:18px;cursor:pointer;">`;
+    h+=`<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:500;color:#E8E8EC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.address||"No address")}</div>`;
+    h+=`<div style="font-size:12px;color:#9B9BA7;margin-top:2px;">${a.zone||"\u2014"} \u00b7 ${jurN} \u00b7 ${ds}</div></div>`;
+    h+=`<div style="text-align:right;flex-shrink:0;"><span style="font-size:18px;font-weight:600;color:${a.summary.viableCount>0?"#4ADE80":"#F09595"};">${a.summary.viableCount}</span><span style="font-size:11px;color:#6B6B78;display:block;">viable</span></div>`;
+    h+=`<div style="display:flex;gap:4px;flex-shrink:0;"><button class="btn-secondary" onclick="ST.showSaved=false;loadAnalysis('${a.id}')" style="padding:4px 10px;font-size:11px;">Load</button>`;
+    h+=`<button class="btn-secondary" onclick="deleteAnalysis('${a.id}');render()" style="padding:4px 10px;font-size:11px;color:#F09595;">Del</button></div></div>`;
+  });
+  h+=`<div class="btn-row" style="margin-top:12px;"><button class="btn-secondary" onclick="ST.showSaved=false;ST.compareIds=[];render()">Back to analysis</button></div>`;
+  APP.innerHTML=h;
+}
+
+function toggleCompare(id){
+  if(!ST.compareIds)ST.compareIds=[];
+  const idx=ST.compareIds.indexOf(id);
+  if(idx>=0)ST.compareIds.splice(idx,1);else if(ST.compareIds.length<4)ST.compareIds.push(id);
+  render();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   COMPARATIVE VIEW (F6)
+   ═══════════════════════════════════════════════════════════════════ */
+function renderComparison(){
+  const list=savedAnalyses();
+  const selected=ST.compareIds.map(id=>list.find(a=>a.id===id)).filter(Boolean);
+  if(selected.length<2){ST.showCompare=false;ST.showSaved=true;render();return}
+  const results=selected.map(a=>{
+    const form=Object.assign(createDefaultForm(),a.form);
+    let R;
+    if(a.jurisdiction==="denver")R=runEngine(form);
+    else if(a.jurisdiction==="epc")R=runEPCEngine(form);
+    else R=runCOSEngine(form);
+    return{analysis:a,results:R};
+  });
+  let h=`<p class="q-title">Comparative Analysis</p>`;
+  h+=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">`;
+  h+=`<thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #2A2A3A;color:#9B9BA7;">Property</th>`;
+  results.forEach(r=>{h+=`<th style="text-align:center;padding:8px;border-bottom:1px solid #2A2A3A;color:#E8E8EC;min-width:150px;">${esc(r.analysis.address||"No address")}</th>`});
+  h+=`</tr></thead><tbody>`;
+  const rows=[
+    ["Jurisdiction",r=>({denver:"Denver",cos:"Colorado Springs",epc:"El Paso County"})[r.analysis.jurisdiction]],
+    ["Zone",r=>r.analysis.zone||"\u2014"],
+    ["Viable",r=>{const n=r.results.error?0:r.results.results.filter(x=>x.v==="yes").length;return`<span style="color:${n>0?"#4ADE80":"#F09595"};font-weight:600;">${n}</span>`}],
+    ["Max beds",r=>{if(r.results.error)return"\u2014";const vi=r.results.results.filter(x=>x.v==="yes");let best=0;vi.forEach(x=>{const n=x.mg===999?9999:(x.mg||0);if(n>best)best=n});return best===9999?"No cap":best===0?"\u2014":String(best)}],
+    ["Conditional",r=>r.results.error?"\u2014":String(r.results.results.filter(x=>x.v==="conditional").length)],
+    ["Blockers",r=>{if(r.results.error)return esc(r.results.error);const stops=r.results.gS||[];return stops.length?stops.map(s=>s.msg).join("; "):"None"}]
+  ];
+  rows.forEach(([label,fn])=>{
+    h+=`<tr><td style="padding:8px;border-bottom:1px solid #1E1E2E;color:#9B9BA7;">${label}</td>`;
+    results.forEach(r=>{h+=`<td style="padding:8px;border-bottom:1px solid #1E1E2E;text-align:center;color:#E8E8EC;">${fn(r)}</td>`});
+    h+=`</tr>`;
+  });
+  h+=`<tr><td style="padding:8px;border-bottom:1px solid #1E1E2E;color:#9B9BA7;vertical-align:top;">Viable pathways</td>`;
+  results.forEach(r=>{
+    if(r.results.error){h+=`<td style="padding:8px;border-bottom:1px solid #1E1E2E;text-align:center;color:#9B9BA7;">\u2014</td>`;return}
+    const vi=r.results.results.filter(x=>x.v==="yes").map(x=>x.nm);
+    h+=`<td style="padding:8px;border-bottom:1px solid #1E1E2E;text-align:center;color:#E8E8EC;font-size:11px;">${vi.length?vi.join("<br>"):"\u2014"}</td>`;
+  });
+  h+=`</tr></tbody></table></div>`;
+  h+=`<div class="btn-row" style="margin-top:16px;"><button class="btn-secondary" onclick="ST.showCompare=false;ST.showSaved=true;render()">Back to saved</button><button class="btn-secondary" onclick="ST.showCompare=false;ST.compareIds=[];render()">New analysis</button></div>`;
+  APP.innerHTML=h;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   GLOSSARY (F11 \u2014 populated by glossary.js)
+   ═══════════════════════════════════════════════════════════════════ */
+function renderGlossary(){
+  let h=`<p class="q-title">Glossary</p><p style="font-size:13px;color:#9B9BA7;margin-bottom:16px;">Abbreviations and terminology used in the Pathway Analyzer.</p>`;
+  if(typeof GLOSSARY==="undefined"){h+=`<p style="color:#F09595;">Glossary data not loaded.</p>`;APP.innerHTML=h;return}
+  const entries=Object.entries(GLOSSARY).sort((a,b)=>a[0].localeCompare(b[0]));
+  const filterJur=ST.glossaryFilter||"all";
+  h+=`<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">`;
+  ["all","denver","cos","epc"].forEach(j=>{
+    const label=j==="all"?"All":j==="denver"?"Denver":j==="cos"?"COS":"EPC";
+    h+=`<button class="btn-secondary" onclick="ST.glossaryFilter='${j}';render()" style="padding:4px 12px;font-size:12px;${filterJur===j?"background:#2A2A4A;color:#8AA8D8;":""}">${label}</button>`;
+  });
+  h+=`</div>`;
+  entries.forEach(([abbr,g])=>{
+    if(filterJur!=="all"&&g.jur!=="all"&&g.jur!==filterJur)return;
+    h+=`<div style="background:#151520;border:1px solid #2A2A3A;border-radius:8px;padding:10px 14px;margin-bottom:6px;">`;
+    h+=`<span style="font-weight:600;color:#8AA8D8;font-family:'IBM Plex Mono',monospace;font-size:13px;">${esc(abbr)}</span>`;
+    h+=` <span style="color:#E8E8EC;font-size:13px;">\u2014 ${esc(g.term)}</span>`;
+    h+=`<p style="font-size:12px;color:#9B9BA7;margin:4px 0 0;">${esc(g.def)}</p></div>`;
+  });
+  h+=`<div class="btn-row" style="margin-top:16px;"><button class="btn-secondary" onclick="ST.showGlossary=false;render()">Back</button></div>`;
+  APP.innerHTML=h;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════════════ */
+if(hydrateFromHash()){go()}else{render()}

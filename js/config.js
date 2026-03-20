@@ -1,5 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════
    CONFIGURATION — Constants, zone lists, use tables, GIS endpoints
+   ═══════════════════════════════════════════════════════════════════
+
+   ADDING A NEW JURISDICTION (F13)
+   ────────────────────────────────
+   1. config.js  — Add GIS endpoints, zone list (XXX_ZL), zone groups
+                   (XXX_ZG), and use table (XXX_UT). Add citeURL() branch.
+                   Add ENGINE_VERIFIED entry.
+   2. engine-xxx.js — Create runXXXEngine(f) returning
+                   {zone, gS, gC, results[], p2}. Each pathway object has:
+                   {id, nm, th, v, mg, stops[], cav[], proc, rat, wf[], rsk{}, rank}.
+   3. gis.js     — Add xxxGisStart/Select/Apply flow + xxxGisRun(). Follow
+                   the unified gisStart/gisSelect pattern.
+   4. state.js   — Add any jurisdiction-specific fields to createDefaultForm()
+                   and createDefaultState().
+   5. ui.js      — Add jurisdiction card in selector, getXXXPages(), intake
+                   pages, GIS done block. Wire engine in go().
+   6. index.html — Add engine script tag.
+   7. sw.js      — Add engine to ASSETS, bump CACHE_NAME version.
+   8. tests/     — Add test cases in test-engines.js.
    ═══════════════════════════════════════════════════════════════════ */
 
 /* ── Denver ArcGIS Layer Endpoints ────────────────────────────── */
@@ -17,7 +36,7 @@ const COS_PARCEL=`${COS_GIS}/LandRecords/MapServer/4/query`;
 const COS_ZONING=`${COS_GIS}/PlanningZoning/MapServer/11/query`;
 const COS_CUP=`${COS_GIS}/PlanningLandUseEntitlements/MapServer/0/query`;
 const COS_USEVAR=`${COS_GIS}/PlanningLandUseEntitlements/MapServer/3/query`;
-const COS_CDPHE="https://services3.arcgis.com/66aUo8zsujfVXRIT/ArcGIS/rest/services/CDPHE_Health_Facilities/FeatureServer/0/query";
+const CDPHE="https://services3.arcgis.com/66aUo8zsujfVXRIT/ArcGIS/rest/services/CDPHE_Health_Facilities/FeatureServer/0/query";
 const COS_OVERLAYS={
   airport:{url:`${COS_GIS}/PlanningZoning/MapServer/1/query`,fields:"ECP_Zoning_Code"},
   hillside:{url:`${COS_GIS}/PlanningZoning/MapServer/4/query`,fields:"OBJECTID"},
@@ -207,6 +226,61 @@ const EPC_INFRA_DISTRICTS={
 };
 
 /* ── GIS Phase Valid Transitions (state machine) ──────────────── */
+/* ── Form Defaults (skip wizard pages for always-same answers) ── */
+const FORM_DEFAULTS={
+  licensing:"yes",
+  correctional:"no",
+  epcSexOffender:"no",
+  epcNonprofit:"no",
+  op24hr:"yes",
+  overnight:"yes"
+};
+
+/* ── Engine Verification Dates (change monitoring) ─────────── */
+const ENGINE_VERIFIED={
+  denver:"2026-03-20",
+  cos:"2026-03-20",
+  epc:"2026-03-20"
+};
+
+/* ── Zone Code Citation URLs (F10) ─────────────────────────────── */
+function citeURL(cite,jur){
+  if(!cite)return null;
+  // Denver Zoning Code — Municode
+  if(jur==="denver"){
+    const m=cite.match(/§\s*([\d]+\.[\d]+\.[\d]+)/);
+    if(m){
+      const art=m[1].split(".")[0];
+      return"https://library.municode.com/co/denver/codes/code_of_ordinances?nodeId=TITIIREMUCO_CH59ZO_ARTII"+(art==="11"?"USSIRE":"GEPR");
+    }
+  }
+  // COS UDC
+  if(jur==="cos"){
+    const m=cite.match(/§\s*([\d]+\.[\d]+)/);
+    if(m)return"https://codelibrary.amlegal.com/codes/coloradospringsco/latest/coloradosprings_co/0-0-0-"+m[1].replace(".","");
+  }
+  // EPC LDC
+  if(jur==="epc"){
+    const m=cite.match(/§\s*([\d]+\.[\d]+)/);
+    if(m)return"https://library.municode.com/co/el_paso_county/codes/land_development_code";
+  }
+  // Colorado Revised Statutes
+  const crs=cite.match(/C\.R\.S\.\s*§\s*([\d]+-[\d]+-[\d]+)/);
+  if(crs)return"https://leg.colorado.gov/colorado-revised-statutes";
+  return null;
+}
+
+/* ── Ancillary Costs (F8) ──────────────────────────────────────── */
+const ANCILLARY_COSTS={
+  architect:{label:"Architect / site plan preparation",min:2000,max:8000,when:"Required for all pathways needing a site plan or site development plan"},
+  trafficStudy:{label:"Traffic impact study",min:5000,max:15000,when:"May be required for large facilities (16+ residents) or facilities on arterial roads"},
+  neighborhoodMtg:{label:"Neighborhood meeting materials & venue",min:200,max:1000,when:"Required for ZPCIM (Denver), CUP (COS), or Special Use (EPC) pathways"},
+  legalCounsel:{label:"Land use attorney consultation",min:1500,max:5000,when:"Recommended for any discretionary pathway (CUP, Special Use, ZPCIM)"},
+  altaSurvey:{label:"ALTA survey",min:3000,max:7000,when:"May be required for site development plans or complex parcels"},
+  stateLicense:{label:"State licensing fees (CDPHE/BHA)",min:300,max:2500,when:"Required for all licensed facilities — varies by facility type and bed count"},
+  fireReview:{label:"Fire code review / sprinkler upgrade",min:1000,max:25000,when:"R-4 occupancy (typically 16+ residents) triggers sprinkler and fire alarm requirements"}
+};
+
 const GIS_TRANSITIONS={
   idle:      ["searching","skipped"],
   searching: ["error","disambig","querying"],

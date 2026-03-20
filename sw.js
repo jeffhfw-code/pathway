@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pathway-v15';
+const CACHE_NAME = 'pathway-v16';
 const ASSETS = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const ASSETS = [
   './js/engine-cos.js',
   './js/engine-epc.js',
   './js/gis.js',
+  './js/glossary.js',
   './js/ui.js',
   './icon-192.png',
   './icon-512.png',

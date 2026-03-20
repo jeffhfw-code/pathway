@@ -82,7 +82,8 @@ input[type="checkbox"]{accent-color:#4A7FBF}
 .detail-section{margin-bottom:14px}.detail-section:last-child{margin-bottom:0}
 .detail-heading{font-size:10px;font-weight:500;color:#6B6B78;text-transform:uppercase;letter-spacing:.08em;margin:0 0 6px}
 .detail-text{font-size:13px;color:#9B9BA7;line-height:1.6;margin:0}
-.cite{font-size:11px;color:#555568;font-family:"IBM Plex Mono",monospace}
+.cite{font-size:11px;color:#555568;font-family:"IBM Plex Mono",monospace;text-decoration:none}
+a.cite:hover{color:#6EA4E8;text-decoration:underline}
 .stop-pill{display:inline-block;font-size:10px;font-weight:500;padding:3px 8px;border-radius:4px;margin:2px 4px 2px 0;letter-spacing:.02em}
 .stop-hard{background:rgba(240,149,149,.12);color:#F09595;border:1px solid rgba(240,149,149,.2)}
 .stop-caveat{background:rgba(251,191,36,.1);color:#FBBF24;border:1px solid rgba(251,191,36,.2)}
@@ -253,4 +254,33 @@ input[type="checkbox"]{accent-color:#4A7FBF}
   .field-help{font-size:11px}
   .gis-link{font-size:11px}
   button,select,.radio-btn,.check-btn,.disambig-item,.jur-card{min-height:44px}
+}
+
+/* ── Print / PDF ───────────────────────────────────────────────── */
+@media print{
+  body{background:#fff;color:#000;font-size:11pt}
+  .topbar,.footer,.btn-row,.tab-row,.btn-primary,.btn-secondary,.tab-btn,.pg-progress,.addr-row,.override-row,.data-caveats{display:none!important}
+  #app{max-width:100%;padding:0.5cm}
+  .dash-header{border-bottom:1pt solid #ccc;padding-bottom:8pt;margin-bottom:12pt}
+  .dash-title{color:#000;font-size:14pt}
+  .dash-sub{color:#555;font-size:10pt}
+  .stat-card{border:1pt solid #ccc;background:#f8f8f8}
+  .stat-val{color:#000}.stat-val.green{color:#1a7a2e}.stat-val.amber{color:#996b00}
+  .summary-row{margin-bottom:12pt}
+  .pw-card{break-inside:avoid;border:1pt solid #ccc;margin-bottom:8pt}
+  .pw-card-head{cursor:default}
+  .pw-detail{display:block!important;max-height:none!important;overflow:visible!important;opacity:1!important;padding:8pt 12pt!important}
+  .pw-badge{border:1pt solid #999;font-size:9pt}
+  .badge-yes{background:#d4edda;color:#155724;border-color:#c3e6cb}
+  .badge-cond{background:#fff3cd;color:#856404;border-color:#ffeeba}
+  .badge-no{background:#f8d7da;color:#721c24;border-color:#f5c6cb}
+  .stop-pill{border:1pt solid #999;font-size:8pt}
+  .cite{color:#555;font-size:9pt}
+  .section-label{break-after:avoid;color:#000;border-bottom:1pt solid #ddd}
+  .facts-grid{break-inside:avoid}
+  .fact-item{border-bottom:1pt solid #eee}
+  .fact-label{color:#555}
+  .fact-val{color:#000}
+  a{color:#000;text-decoration:none}
+  .caveat-card{break-inside:avoid;border:1pt solid #ccc}
 }

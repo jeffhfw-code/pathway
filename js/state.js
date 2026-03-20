@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 function createDefaultForm(){
-  return{
+  return Object.assign({
     address:null,zone:null,lotSize:null,existingRC:null,maintained:null,
     religious:null,correctional:null,rcWithin1mi:null,rcType34within1mi:null,
     distType34:null,op24hr:null,overnight:null,licensing:null,
@@ -13,7 +13,7 @@ function createDefaultForm(){
     distGLRDetox:null,nearestAL:null,
     // EPC-specific
     epcSexOffender:null,epcNonprofit:null,epcSeparation:null,epcCadO:null
-  };
+  },FORM_DEFAULTS);
 }
 
 function createDefaultState(){
@@ -30,7 +30,9 @@ function createDefaultState(){
     cosAutoALR:0,cosAutoCUP:[],cosAutoUV:[],cosAutoNearestFacDist:null,
     cosAutoNearestFacName:null,cosAutoNearestFacIsALR:false,
     // EPC infrastructure
-    epcInfraStatus:null,epcInfraDistrict:null,epcInfraChecking:false
+    epcInfraStatus:null,epcInfraDistrict:null,epcInfraChecking:false,
+    // EPC CDPHE facilities
+    epcAutoFacilities:[],epcAutoNearestFacDist:null,epcAutoNearestFacName:null
   };
 }
 
@@ -99,4 +101,60 @@ function validateFormBeforeEngine(){
     else f.epcSeparation=r.value;
   }
   return errors;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SHAREABLE URL (F4)
+   ═══════════════════════════════════════════════════════════════════ */
+function stateToHash(){
+  return"#"+btoa(JSON.stringify({j:ST.jurisdiction,f:ST.form}));
+}
+
+function hydrateFromHash(){
+  if(!location.hash||location.hash.length<2)return false;
+  try{
+    const payload=JSON.parse(atob(location.hash.slice(1)));
+    if(payload.j&&payload.f){
+      ST.jurisdiction=payload.j;
+      ST.form=Object.assign(createDefaultForm(),payload.f);
+      return true;
+    }
+  }catch(e){console.warn("Invalid hash:",e)}
+  return false;
+}
+
+function shareURL(){
+  history.replaceState(null,"",stateToHash());
+  navigator.clipboard.writeText(location.href).then(()=>{
+    const t=document.createElement("div");
+    t.textContent="Link copied!";
+    t.style.cssText="position:fixed;top:16px;right:16px;background:#1A3D28;color:#4ADE80;padding:8px 16px;border-radius:8px;font-size:13px;z-index:9999;";
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(),2000);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SAVED ANALYSES (F5)
+   ═══════════════════════════════════════════════════════════════════ */
+function savedAnalyses(){return JSON.parse(localStorage.getItem("pw-saved")||"[]")}
+
+function saveAnalysis(summary){
+  const list=savedAnalyses();
+  list.unshift({id:String(Date.now()),ts:Date.now(),jurisdiction:ST.jurisdiction,address:ST.form.address,zone:ST.form.zone,form:{...ST.form},summary});
+  localStorage.setItem("pw-saved",JSON.stringify(list));
+}
+
+function deleteAnalysis(id){
+  const list=savedAnalyses().filter(a=>a.id!==id);
+  localStorage.setItem("pw-saved",JSON.stringify(list));
+}
+
+function loadAnalysis(id){
+  const a=savedAnalyses().find(x=>x.id===id);
+  if(!a)return;
+  resetState();
+  ST.jurisdiction=a.jurisdiction;
+  ST.form=Object.assign(createDefaultForm(),a.form);
+  go();
 }

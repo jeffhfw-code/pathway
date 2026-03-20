@@ -163,7 +163,7 @@ async function cosQueryLayers(lat,lon){
   const overlayFetches=Object.entries(COS_OVERLAYS).map(([key,layer])=>
     fetch(`${layer.url}?${gP}&outFields=${layer.fields}`).then(r=>r.json()).then(d=>({key,features:d.features||[]})).catch(()=>({key,features:[]}))
   );
-  const cdpheFetch=fetch(`${COS_CDPHE}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=Facility_Name,Facility_Type,Facility_Type_Detail,Address_Full,Licensed_Beds_Total,Operating_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&resultRecordCount=200&f=json`).then(r=>r.json()).catch(()=>({features:[]}));
+  const cdpheFetch=fetch(`${CDPHE}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=Facility_Name,Facility_Type,Facility_Type_Detail,Address_Full,Licensed_Beds_Total,Operating_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&resultRecordCount=200&f=json`).then(r=>r.json()).catch(()=>({features:[]}));
   const cupFetch=fetch(`${COS_CUP}?${gP}&outFields=FILE_NUM`).then(r=>r.json()).catch(()=>({features:[]}));
   const uvFetch=fetch(`${COS_USEVAR}?${gP}&outFields=FILE_NUM`).then(r=>r.json()).catch(()=>({features:[]}));
   const[parcelRes,zoningRes,...rest]=await Promise.all([...coreFetches,...overlayFetches,cdpheFetch,cupFetch,uvFetch]);
@@ -257,11 +257,12 @@ async function epcGisRun(candidate){
   const geom=`${lon},${lat}`;
   const gP=`geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&f=json`;
   try{
-    const[zoningRes,parcelRes,overlayRes,cityRes]=await Promise.all([
+    const[zoningRes,parcelRes,overlayRes,cityRes,cdpheRes]=await Promise.all([
       fetch(`${EPC_GIS_ZONING}?${gP}&outFields=ZONING,ZONETYPE`).then(r=>r.json()),
       fetch(`${EPC_GIS_PARCEL}?${gP}&outFields=PARCEL,HYPERLINK,Shape.STArea()`).then(r=>r.json()),
       fetch(`${EPC_GIS_OVERLAY}?${gP}&outFields=ZONEOVERLAY`).then(r=>r.json()),
-      fetch(`${EPC_GIS_CITIES}?${gP}&outFields=NAME`).then(r=>r.json()).catch(()=>({features:[]}))
+      fetch(`${EPC_GIS_CITIES}?${gP}&outFields=NAME`).then(r=>r.json()).catch(()=>({features:[]})),
+      fetch(`${CDPHE}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=Facility_Name,Facility_Type,Facility_Type_Detail,Address_Full,Licensed_Beds_Total,Operating_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&resultRecordCount=200&f=json`).then(r=>r.json()).catch(()=>({features:[]}))
     ]);
     const zoning=zoningRes.features?.length?zoningRes.features[0].attributes:null;
     let parcel=null;const pCount=parcelRes.features?.length||0;
@@ -283,6 +284,17 @@ async function epcGisRun(candidate){
     } else if(cityName&&!autoZone){
       cityWarning="This address is inside "+cityName+" (incorporated). The El Paso County Land Development Code does not apply. Use "+cityName+"'s zoning code instead.";
     }
+
+    // CDPHE licensed facilities within 1 mile
+    const epcFacilities=(cdpheRes.features||[]).map(f=>{
+      const a=f.attributes;const d=gisHav(lat,lon,f.geometry.y,f.geometry.x);
+      return{name:a.Facility_Name,type:a.Facility_Type,detail:a.Facility_Type_Detail,addr:a.Address_Full,beds:a.Licensed_Beds_Total,status:a.Operating_Status,mi:d,ft:Math.round(d*5280)};
+    }).sort((a,b)=>a.mi-b.mi);
+    ST.epcAutoFacilities=epcFacilities;
+    const epcNearest=epcFacilities.length?epcFacilities[0]:null;
+    ST.epcAutoNearestFacDist=epcNearest?epcNearest.ft:null;
+    ST.epcAutoNearestFacName=epcNearest?epcNearest.name:null;
+    if(epcNearest)ST.form.epcSeparation=epcNearest.ft;
 
     ST.gisData={matchedAddr:candidate.attributes.Match_addr,lat,lon,autoZone,autoLot,autoOverlay,parcelId,assessorLink,cityName,cityWarning};
     ST.gisAutoZone=autoZone;
