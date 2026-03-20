@@ -1018,15 +1018,14 @@ async function epcWaterSewerCheck(addressStr,lat,lon){
   ST.epcInfraStatus=null;ST.epcInfraDistrict=null;ST.epcInfraChecking=true;render();
   try{
     const gP=`geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=NAME&returnGeometry=false&f=json`;
-    // Query all three district layers in parallel
-    const[swdRes,waterRes,sanRes]=await Promise.all([
+    // SanitationWaterDistricts + SanitationDistricts only
+    // WaterDistricts omitted — contains wholesale conservancy districts, not retail providers
+    const[swdRes,sanRes]=await Promise.all([
       fetch(`${EPC_DIST_SWD}?${gP}`).then(r=>r.json()).catch(()=>({features:[]})),
-      fetch(`${EPC_DIST_WATER}?${gP}`).then(r=>r.json()).catch(()=>({features:[]})),
       fetch(`${EPC_DIST_SAN}?${gP}`).then(r=>r.json()).catch(()=>({features:[]})),
     ]);
-    // Collect all district names found
     const names=[];
-    for(const data of[swdRes,waterRes,sanRes]){
+    for(const data of[swdRes,sanRes]){
       (data.features||[]).forEach(f=>{if(f.attributes?.NAME)names.push(f.attributes.NAME)});
     }
     // Deduplicate and format
