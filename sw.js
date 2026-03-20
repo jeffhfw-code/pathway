@@ -1,7 +1,15 @@
-const CACHE_NAME = 'pathway-v14';
+const CACHE_NAME = 'pathway-v15';
 const ASSETS = [
   './',
   './index.html',
+  './styles.css',
+  './js/config.js',
+  './js/state.js',
+  './js/engine-denver.js',
+  './js/engine-cos.js',
+  './js/engine-epc.js',
+  './js/gis.js',
+  './js/ui.js',
   './icon-192.png',
   './icon-512.png',
   './manifest.json'
@@ -31,6 +39,12 @@ self.addEventListener('fetch', e => {
 
   // ArcGIS API calls: always go to network (never cache)
   if (url.hostname.includes('arcgis')) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+
+  // Colorado state API calls: always go to network
+  if (url.hostname.includes('dwr.state.co.us') || url.hostname.includes('gis.colorado.gov')) {
     e.respondWith(fetch(e.request));
     return;
   }
