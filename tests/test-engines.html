@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pathway Analyzer — Engine Tests</title>
+<style>
+body{font-family:monospace;background:#0D0D14;color:#E8E8EC;padding:2rem;line-height:1.6}
+h1{font-size:18px;color:#8AA8D8;margin-bottom:1rem}
+.suite{margin-bottom:1.5rem}
+.suite-name{font-size:14px;font-weight:bold;color:#6EA4E8;margin-bottom:0.5rem}
+.pass{color:#4ADE80}.fail{color:#F09595}.skip{color:#FBBF24}
+.result{padding:2px 0;font-size:13px}
+.summary{margin-top:2rem;padding:1rem;border:1px solid #2A2A3A;border-radius:6px;font-size:14px}
+.detail{font-size:11px;color:#6B6B78;margin-left:2rem}
+</style>
+</head>
+<body>
+<h1>Pathway Analyzer — Engine Tests</h1>
+<div id="output"></div>
+<!-- Load only the files needed for engine testing (no DOM/GIS dependencies) -->
+<script src="../js/config.js"></script>
+<script src="../js/state.js"></script>
+<script src="../js/engine-denver.js"></script>
+<script src="../js/engine-cos.js"></script>
+<script src="../js/engine-epc.js"></script>
+<script src="test-engines.js"></script>
+</body>
+</html>
