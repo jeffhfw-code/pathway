@@ -1051,11 +1051,21 @@ async function epcWaterSewerCheck(addressStr,lat,lon){
         if(!subdivName){
           const legal=(attr.legalDesc||"").toUpperCase();
           console.log("[INFRA] Legal desc:",legal);
-          const m=legal.match(/LOT\s+\S+\s+(.+?)(?:\s+(?:SUB|FIL|FILING|BLOCK|BLK)\b)/);
-          if(m){subdivName=m[1].trim();console.log("[INFRA] Regex extracted subdiv:",subdivName);}
-          else{
-            subdivName=legal.replace(/^LOT\s+\S+\s+/,"").replace(/\s+(SUB|FIL|FILING|BLOCK|BLK).*/,"").trim();
-            console.log("[INFRA] Fallback subdiv:",subdivName);
+          // Try to find named subdivision ending in SUB/SUBDIVISION first
+          // Handles: "LOTS 1 TO 5 INC BLK 4 BLACK FOREST SUB SLY..."
+          // Handles: "LOT 28  VILLAGE CENTER @ WOODMOOR FIL NO 2"
+          // Handles: "LOT 44  MISTY ACRES SUB FIL NO 3"
+          const subMatch=legal.match(/([A-Z][A-Z\s&@']+?)\s+(?:SUB|SUBDIVISION)\b/);
+          if(subMatch){
+            subdivName=subMatch[1].replace(/\bBLK\s+\d+\s*/g,"").replace(/\bLOTS?\s+[\d\s]+INC\s*/g,"").trim();
+            console.log("[INFRA] SUB match extracted:",subdivName);
+          } else {
+            const m=legal.match(/LOT\s+\S+\s+(.+?)(?:\s+(?:FIL|FILING|BLOCK|BLK)\b)/);
+            if(m){subdivName=m[1].trim();console.log("[INFRA] Regex extracted subdiv:",subdivName);}
+            else{
+              subdivName=legal.replace(/^LOT\s+\S+\s+/,"").replace(/\s+(SUB|FIL|FILING|BLOCK|BLK).*/,"").trim();
+              console.log("[INFRA] Fallback subdiv:",subdivName);
+            }
           }
         } else {
           console.log("[INFRA] subName field:",subdivName);
@@ -1070,6 +1080,14 @@ async function epcWaterSewerCheck(addressStr,lat,lon){
             if(fragment.split(" ").some(word=>word.length>4&&subdivName.includes(word))){
               districtName=district;console.log("[INFRA] Word match:",fragment,"->",district);break;
             }
+          }
+        }
+        // Metes-and-bounds parcels (e.g. "LOTS 1 TO 5 INC", "NW1/4", "SEC 12") = rural, likely private well/septic
+        if(!districtName){
+          const mbPattern=/^(LOTS?\s+\d|N[WE]\d|S[WE]\d|SEC\s+\d|NW1|SE1|SW1|NE1|TRACT)/;
+          if(mbPattern.test(subdivName)||subdivName.length<6){
+            console.log("[INFRA] Metes-and-bounds parcel — flagging as likely well/septic");
+            ST.epcInfraStatus="well-septic";ST.epcInfraDistrict=null;ST.epcInfraChecking=false;render();return;
           }
         }
         if(!districtName)console.log("[INFRA] No district match found for subdiv:",subdivName);
