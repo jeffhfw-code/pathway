@@ -310,7 +310,7 @@ input[type="checkbox"]{accent-color:#4A7FBF}
 </div>
 <div id="app"></div>
 <div class="footer">
-  <div class="footer-left"><span class="footer-dot"></span> Engine v14</div>
+  <div class="footer-left"><span class="footer-dot"></span> Engine v15</div>
   <div class="footer-right">DZC Art. 11 · COS UDC Ch. 7 · EPC LDC Ch. 5 · Source authority only</div>
 </div>
 <script>
@@ -1039,7 +1039,7 @@ async function epcWaterSewerCheck(addressStr,lat,lon){
     // Step 2: No well found — check statewide parcel layer for subdivision name
     let subdivName="";let districtName=null;
     if(lat&&lon){
-      const parcelUrl=`${EPC_PARCEL_FS}?geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=situsAdd,legalDesc,subName,zoningCode&f=json`;
+      const parcelUrl=`${EPC_PARCEL_FS}?geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=50&units=esriSRUnit_Meter&outFields=situsAdd,legalDesc,subName,zoningCode&f=json`;
       console.log("[INFRA] Parcel URL:",parcelUrl);
       const parcelRes=await fetch(parcelUrl);const parcelData=await parcelRes.json();
       console.log("[INFRA] Parcel features:",parcelData.features?.length||0);
