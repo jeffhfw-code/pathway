@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pathway-v16';
+const CACHE_NAME = 'pathway-v17';
 const ASSETS = [
   './',
   './index.html',
@@ -50,17 +50,16 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // App shell: cache-first, fall back to network
+  // App shell: stale-while-revalidate — serve cache instantly, update in background
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      return cached || fetch(e.request).then(response => {
-        // Cache successful responses for next time
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        }
-        return response;
-      });
-    })
+    caches.open(CACHE_NAME).then(cache =>
+      cache.match(e.request).then(cached => {
+        const fetched = fetch(e.request).then(response => {
+          if (response.ok) cache.put(e.request, response.clone());
+          return response;
+        });
+        return cached || fetched;
+      })
+    )
   );
 });
