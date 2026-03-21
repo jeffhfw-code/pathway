@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pathway-v17';
+const CACHE_NAME = 'pathway-v18';
 const ASSETS = [
   './',
   './index.html',

@@ -617,6 +617,7 @@ function getPathwayDocs(r){
     docs.push({name:"Copy of state license or certification",required:true});
     docs.push({name:"Operational plan (staffing, hours, population served)",required:true});
     if(ST.form.correctional==="yes")docs.push({name:"DPS referral documentation",required:true});
+    if(r.id==="P3"||r.id==="P4")docs.push({name:"Agency referral response documentation (DOTI, DPS, Parks, etc.)",required:false});
     docs.push({name:"Property ownership documentation",required:true});
     docs.push({name:"Proof of insurance",required:false});
   } else if(jur==="cos"){
@@ -646,6 +647,8 @@ function getPathwayDocs(r){
     docs.push({name:"Residential site plan ($165)",required:r.id.startsWith("GH")});
     docs.push({name:"Copy of all applicable state licenses",required:true});
     docs.push({name:"Floor plan showing bedrooms and common areas",required:true});
+    docs.push({name:"Written description of proposed operations",required:true});
+    docs.push({name:"Vicinity / location map",required:true});
     docs.push({name:"Proof of property ownership or lease",required:true});
     docs.push({name:"Fire code compliance documentation",required:false});
     docs.push({name:"Water/wastewater capacity documentation (if well/septic)",required:ST.epcInfraStatus==="well-septic"});
