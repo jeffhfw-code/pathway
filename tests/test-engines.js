@@ -241,6 +241,48 @@ test("OS zone returns error result for all NP",()=>{
 
 endSuite();
 
+suite("Denver Engine — Fee Population (F8)");
+
+test("P1 standard pathway has rsk.fee",()=>{
+  const r=runEngine(baseForm({zone:"S-MX-3"}));
+  const p1=r.results.find(p=>p.id==="P1");
+  assert(p1.rsk.fee,"P1 should have fee");
+  assertEqual(p1.rsk.fee,"$100","P1 fee should be $100");
+});
+
+test("P1 religious exemption has no fee",()=>{
+  const r=runEngine(baseForm({zone:"S-MX-3",religious:"yes"}));
+  const p1=r.results.find(p=>p.id==="P1");
+  assert(!p1.rsk.fee,"P1 religious should have no fee");
+});
+
+test("P2 pathway has rsk.fee",()=>{
+  const r=runEngine(baseForm({zone:"S-MX-3"}));
+  const p2=r.results.find(p=>p.id==="P2");
+  assert(p2.rsk.fee,"P2 should have fee");
+  assertEqual(p2.rsk.fee,"$100","P2 fee should be $100");
+});
+
+test("P3 pathway has rsk.fee",()=>{
+  const r=runEngine(baseForm({zone:"S-MX-3"}));
+  const p3=r.results.find(p=>p.id==="P3");
+  assert(p3.rsk.fee,"P3 should have fee");
+});
+
+test("P4 pathway has rsk.fee",()=>{
+  const r=runEngine(baseForm({zone:"S-MX-3"}));
+  const p4=r.results.find(p=>p.id==="P4");
+  assert(p4.rsk.fee,"P4 should have fee");
+});
+
+test("P5 existing use has no fee",()=>{
+  const r=runEngine(baseForm({zone:"S-MX-3",existingRC:"yes",maintained:"yes"}));
+  const p5=r.results.find(p=>p.id==="P5");
+  assert(!p5.rsk.fee,"P5 should have no fee");
+});
+
+endSuite();
+
 /* ═══════════════════════════════════════════════════════════════════
    COS ENGINE TESTS
    ═══════════════════════════════════════════════════════════════════ */
@@ -459,6 +501,38 @@ test("Existing conforming use in EPC",()=>{
   const r=runEPCEngine(baseForm({zone:"RS-20000",existingRC:"yes",maintained:"yes"}));
   const nc=r.results.find(p=>p.id==="NC");
   assertEqual(nc.v,"yes");
+});
+
+endSuite();
+
+suite("COS Engine — Fee Population (F8 verification)");
+
+test("HSE-S has rsk.fee",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
+  const hse=r.results.find(p=>p.id==="HSE-S");
+  assert(hse&&hse.rsk.fee,"HSE-S should have fee");
+});
+
+test("NC existing use has no fee",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",existingRC:"yes",maintained:"yes"}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assert(!nc.rsk.fee,"NC should have no fee");
+});
+
+endSuite();
+
+suite("EPC Engine — Fee Population (F8 verification)");
+
+test("GH-DIS-S has rsk.fee",()=>{
+  const r=runEPCEngine(baseForm({zone:"RS-20000"}));
+  const gh=r.results.find(p=>p.id==="GH-DIS-S");
+  assert(gh&&gh.rsk.fee,"GH-DIS-S should have fee");
+});
+
+test("NC existing use has no fee",()=>{
+  const r=runEPCEngine(baseForm({zone:"RS-20000",existingRC:"yes",maintained:"yes"}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assert(!nc.rsk.fee,"NC should have no fee");
 });
 
 endSuite();

@@ -617,6 +617,7 @@ function getPathwayDocs(r){
     docs.push({name:"Copy of state license or certification",required:true});
     docs.push({name:"Operational plan (staffing, hours, population served)",required:true});
     if(ST.form.correctional==="yes")docs.push({name:"DPS referral documentation",required:true});
+    if(r.id==="P3"||r.id==="P4")docs.push({name:"Agency referral response documentation (DOTI, DPS, Parks, etc.)",required:false});
     docs.push({name:"Property ownership documentation",required:true});
     docs.push({name:"Proof of insurance",required:false});
   } else if(jur==="cos"){
@@ -638,14 +639,18 @@ function getPathwayDocs(r){
     if(proc.includes("Special Use")){
       docs.push({name:"Special Use application ($6,401)",required:true});
       docs.push({name:"Adjacent owner notification documentation",required:true});
+      docs.push({name:"Agency referral response documentation",required:false});
       docs.push({name:"FHAA reasonable accommodation documentation",required:r.id.startsWith("GH")});
     } else {
       docs.push({name:"Group Home Permit application ($192)",required:r.id.startsWith("GH")});
       docs.push({name:"Site Development Plan application ($1,685–$3,955)",required:!r.id.startsWith("GH")});
     }
     docs.push({name:"Residential site plan ($165)",required:r.id.startsWith("GH")});
+    if(r.id.startsWith("GH"))docs.push({name:"SP-05 enforcement policy confirmation from PCD",required:false});
     docs.push({name:"Copy of all applicable state licenses",required:true});
     docs.push({name:"Floor plan showing bedrooms and common areas",required:true});
+    docs.push({name:"Written description of proposed operations",required:true});
+    docs.push({name:"Vicinity / location map",required:true});
     docs.push({name:"Proof of property ownership or lease",required:true});
     docs.push({name:"Fire code compliance documentation",required:false});
     docs.push({name:"Water/wastewater capacity documentation (if well/septic)",required:ST.epcInfraStatus==="well-septic"});

@@ -21,7 +21,7 @@ function runEngine(f){
     if(isMRH3(z))pw.cav.push({msg:"M-RH-3: Type 1 density applicability ambiguous",cite:"§ 11.2.9.2/§ 9.7.9",blocking:true,resolve:"Request CPD determination."});
     if(rel){pw.proc="No ZP required";pw.rat="Religious Assembly exemption — no zoning permit needed (up to 10 guests year-round).";pw.wf=[{t:"Confirm religious assembly status"},{t:"Begin operations — no ZP required"},{t:"If exceeding 10 guests, file for Type 2/3/4"}]}
     else{pw.rat="Type 1 permitted in "+z+". Up to 10 guests year-round.";pw.wf=[{t:"Pre-app meeting (optional)"},{t:"Compile ZP application"},{t:"File with CPD"},{t:"Completeness review"},{t:"ZA decision"}];if(cor)pw.wf.splice(3,0,{t:"DPS referral and comment period"})}
-    pw.rsk={nimby:"Low",escalation:"Low",timeline:"2–6 weeks",discretion:"Minimal",approval:"Low"};pw.rank="Best pathway";
+    pw.rsk={nimby:"Low",escalation:"Low",timeline:"2–6 weeks",discretion:"Minimal",approval:"Low"};if(!rel)pw.rsk.fee="$100";pw.rank="Best pathway";
   });
 
   tP("P2","Type 2","11–40 guests","t2",pw=>{
@@ -36,7 +36,7 @@ function runEngine(f){
     if(isMRH3(z)&&cor)pw.cav.push({msg:"M-RH-3 + correctional: prohibition vs ZPCIM unclear",cite:"§§ 11.2.10.2–.3",blocking:true,resolve:"Request CPD determination."});
     pw.mg=mx;pw.rat="Type 2 in "+z+". Max "+mx+(isSTR?" (SU/TU/RH cap)":"")+".";
     const cim=pw.proc.includes("ZPCIM");
-    pw.rsk={nimby:cim?"Medium":"Low",escalation:cim?"Medium":"Low",timeline:cim?"8–14 weeks":"2–6 weeks",discretion:cim?"Moderate":"Low",approval:cim?"Medium":"Low"};
+    pw.rsk={nimby:cim?"Medium":"Low",escalation:cim?"Medium":"Low",timeline:cim?"8–14 weeks":"2–6 weeks",discretion:cim?"Moderate":"Low",approval:cim?"Medium":"Low",fee:"$100"};
     if(cim)pw.rsk.clock="180-day City review clock (Exec. Order 151)";
     pw.rank=cim?"Moderate":"Good";
     pw.wf=cim?[{t:"Pre-app meeting"},{t:"Host CIM (21-day notice, 400-ft radius)"},{t:"Compile ZP + CIM summary"},{t:"File with CPD"},{t:"Completeness review"},{t:"ZA decision"}]:[{t:"Pre-app meeting (optional)"},{t:"Compile ZP application"},{t:"File with CPD"},{t:"Completeness review"},{t:"ZA decision"}];
@@ -58,7 +58,7 @@ function runEngine(f){
     addSpC(pw,"Type 3");
     let sn=sp?" Spacing met ("+sp.d.toLocaleString()+" ft min).":"";if(isDtNS(z))sn=" No spacing for this downtown district.";
     pw.rat="Type 3 in "+z+". 41–100 guests."+sn;
-    pw.rsk={nimby:"High",escalation:"High",timeline:"12–20 weeks",discretion:"Moderate",approval:"Medium–High",clock:"180-day City review clock (Exec. Order 151)"};pw.rank="Challenging";
+    pw.rsk={nimby:"High",escalation:"High",timeline:"12–20 weeks",discretion:"Moderate",approval:"Medium–High",clock:"180-day City review clock (Exec. Order 151)",fee:"$100"};pw.rank="Challenging";
     pw.wf=[{t:"Pre-app meeting"},{t:"Host CIM (21-day notice, 400-ft radius)"},{t:"Compile ZP + CIM summary"},{t:"File with CPD"},{t:"Completeness review"},{t:"Agency referrals"},{t:"ZA decision"}];
     if(cor){pw.wf.splice(pw.wf.length-1,0,{t:"DPS referral and comment period"})}
   });
@@ -69,7 +69,7 @@ function runEngine(f){
     addSpC(pw,"Type 4");
     let sn=sp?" Spacing met.":"";if(isDtNS(z))sn=" No spacing for this downtown district.";
     pw.rat="Type 4 in "+z+". 101+. No code cap."+sn;
-    pw.rsk={nimby:"Very high",escalation:"Very high",timeline:"16–24 weeks",discretion:"Significant",approval:"High",clock:"180-day City review clock (Exec. Order 151)"};pw.rank="Most difficult";
+    pw.rsk={nimby:"Very high",escalation:"Very high",timeline:"16–24 weeks",discretion:"Significant",approval:"High",clock:"180-day City review clock (Exec. Order 151)",fee:"$100"};pw.rank="Most difficult";
     pw.wf=[{t:"Pre-app meeting"},{t:"Host CIM (21-day notice, 400-ft radius)"},{t:"Compile ZP + CIM summary"},{t:"File with CPD"},{t:"Completeness review"},{t:"Agency referrals"},{t:"ZA decision"}];
     if(cor){pw.wf.splice(pw.wf.length-1,0,{t:"DPS referral and comment period"})}
   });
