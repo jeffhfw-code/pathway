@@ -18,6 +18,7 @@ function getPages(){
   if(!ST.jurisdiction)return[{id:"jurisdiction"}];
   if(ST.jurisdiction==="denver")return getDenverPages();
   if(ST.jurisdiction==="epc")return getEPCPages();
+  if(ST.jurisdiction==="manitou")return getManitouPages();
   return getCOSPages();
 }
 
@@ -88,6 +89,20 @@ function getEPCPages(){
   p.push({id:"review"});return p;
 }
 
+function getManitouPages(){
+  const p=[{id:"manAddress"},{id:"manZone"}];const z=ST.form.zone;if(!z)return p;
+  const ut=MAN_UT[z];if(!ut)return p;
+  const allN=Object.values(ut).every(v=>v==="N");
+  if(allN){p.push({id:"allNP"});return p}
+  p.push({id:"manTreatment"});
+  p.push({id:"manPopulation"});
+  p.push({id:"manOperations"});
+  p.push({id:"manConstruction"});
+  p.push({id:"existingRC"});
+  if(ST.form.existingRC==="yes"){p.push({id:"maintained"});p.push({id:"manPreexisting"})}
+  p.push({id:"review"});return p;
+}
+
 function advance(){const pages=getPages();if(ST.pg<pages.length-1)ST.pg++;render()}
 function goBack(){if(ST.pg>0){ST.pg--;render()}}
 
@@ -104,7 +119,9 @@ function render(){
   let h="";
   if(page.id!=="jurisdiction"){
     h='<div class="pg-progress">';for(let i=0;i<pages.length;i++)h+=`<div class="pg-dot ${i<pg?"done":i===pg?"cur":""}"></div>`;
-    h+=`<span class="pg-label">${pg+1} of ${pages.length}</span></div>`;
+    h+=`<span class="pg-label">${pg+1} of ${pages.length}</span>`;
+    h+=`<button class="btn-restart" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()" title="Start a new analysis">New Analysis</button>`;
+    h+=`</div>`;
   }
   const bk=pg>0?`<button class="btn-secondary" onclick="goBack()">Back</button>`:"";
   const nx=`<button class="btn-primary" onclick="advance()">Next</button>`;
@@ -116,6 +133,7 @@ function render(){
     h+=`<div class="jur-card ${ST.jurisdiction==="denver"?"sel":""}" onclick="ST.jurisdiction='denver';resetState(true);ST.pg=0;render()"><p class="jur-name">Denver</p><p class="jur-desc">Denver Zoning Code — Residential Care Types 1–4 (DZC Art. 11, §§ 11.2.8–11.2.12)</p></div>`;
     h+=`<div class="jur-card ${ST.jurisdiction==="cos"?"sel":""}" onclick="ST.jurisdiction='cos';resetState(true);ST.pg=0;render()"><p class="jur-name">Colorado Springs</p><p class="jur-desc">Unified Development Code — Group Living / Human Services Establishment (UDC Ch. 7, § 7.3.301E)</p></div>`;
     h+=`<div class="jur-card ${ST.jurisdiction==="epc"?"sel":""}" onclick="ST.jurisdiction='epc';resetState(true);ST.pg=0;render()"><p class="jur-name">El Paso County</p><p class="jur-desc">Land Development Code — Group Home / Institutional BH Pathways (LDC Ch. 5, § 5.2.17) · SP-05 enforcement policy active</p></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="manitou"?"sel":""}" onclick="ST.jurisdiction='manitou';resetState(true);ST.pg=0;render()"><p class="jur-name">Manitou Springs</p><p class="jur-desc">Land Use &amp; Development Code — Group Home, LTC, Medical &amp; Boarding Pathways (LUDC Title 18)</p></div>`;
     if(ST.jurisdiction){h+=`<div class="btn-row"><button class="btn-primary" onclick="advance()">Next</button></div>`}
     APP.innerHTML=h;return;
   }
@@ -182,7 +200,7 @@ function render(){
       if(!autoSrc){h+=`<div class="info-box"><strong>How to find your zone district:</strong><ol><li>Click the link above to open Denver's official zoning map.</li><li>Search for the property address.</li><li>Click the parcel — the zone district code appears in the popup.</li><li>Select the matching code above.</li></ol></div>`}
       h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
     }
-    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.25rem;"><p style="font-size:16px;font-weight:500;color:#F09595;margin:0 0 6px;">No pathways available</p><p style="font-size:13px;color:#F09595;margin:0;">${ST.jurisdiction==="denver"?"Residential Care is not permitted in any form":"No group living or human services uses are permitted"} in ${f.zone}.</p></div><div class="btn-row"><button class="btn-secondary" onclick="ST.pg=0;render()">Start over</button></div>`}
+    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">${ST.jurisdiction==="denver"?"Residential Care is not permitted in any form":"No group living or human services uses are permitted"} in the <strong>${f.zone}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application (if available).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
     else if(page.id==="licensing"){h+=`<p class="q-title">Licensing and certification</p><p class="q-sub">Can the operator obtain all required state and City licensing or certification?</p><div class="radio-row">${r3("licensing",f.licensing)}</div><div class="btn-row">${bk}${f.licensing!==null?nx:""}</div>`}
     else if(page.id==="correctional"){h+=`<p class="q-title">Correctional supervision population</p><p class="q-sub">Will the facility serve non-paroled persons placed by a court, corrections department, or supervised transition program?</p><div class="radio-row">${r2("correctional",f.correctional)}</div><div class="field-help">Does not include parolees or voluntary participants.</div><div class="btn-row">${bk}${f.correctional!==null?nx:""}</div>`}
     else if(page.id==="op24hr"){h+=`<p class="q-title">24-hour operation</p><p class="q-sub">Will the facility operate 24 hours per day?</p><div class="radio-row">${r2("op24hr",f.op24hr)}</div><div class="btn-row">${bk}${f.op24hr!==null?nx:""}</div>`}
@@ -282,7 +300,7 @@ function render(){
       else h+=`<a class="gis-link" href="${COS_ZMAP}" target="_blank" rel="noopener">Open Colorado Springs zoning map &#8599;</a>`;
       h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
     }
-    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.25rem;"><p style="font-size:16px;font-weight:500;color:#F09595;margin:0 0 6px;">No pathways available</p><p style="font-size:13px;color:#F09595;margin:0;">No group living or human services uses are permitted in ${f.zone}.</p></div><div class="btn-row"><button class="btn-secondary" onclick="ST.pg=0;render()">Start over</button></div>`}
+    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No group living or human services uses are permitted in the <strong>${f.zone}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application (if available).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
     else if(page.id==="licensing"){h+=`<p class="q-title">Licensing and certification</p><p class="q-sub">Can the operator obtain all required state licensing or certification? (§ 7.3.107)</p><div class="radio-row">${r3("licensing",f.licensing)}</div><div class="btn-row">${bk}${f.licensing!==null?nx:""}</div>`}
     else if(page.id==="correctional"){h+=`<p class="q-title">Correctional supervision population</p><p class="q-sub">Will the facility serve persons under correctional supervision (parolees, probationers, court-ordered placement)?</p><div class="radio-row">${r2("correctional",f.correctional)}</div><div class="field-help">Correctional populations are NOT FHA-protected \u2014 facility must use GLR pathway, not HSE. (§ 7.6.301)</div><div class="btn-row">${bk}${f.correctional!==null?nx:""}</div>`}
     else if(page.id==="cosFHA"){
@@ -363,6 +381,14 @@ function render(){
         h+=`<div class="auto-field"><span class="auto-label">Lot size</span><span class="auto-val">${gd.autoLot?gd.autoLot.toLocaleString()+" sf":"Not found"}<span class="auto-badge api">API</span></span></div>`;
         if(gd.parcelId)h+=`<div class="auto-field"><span class="auto-label">Parcel</span><span class="auto-val">${gd.parcelId}${gd.assessorLink?` <a href="${gd.assessorLink}" target="_blank" rel="noopener" style="color:#6EA4E8;font-size:11px;">Assessor &#8599;</a>`:""}</span></div>`;
         if(gd.autoOverlay)h+=`<div class="auto-field"><span class="auto-label">Overlay</span><span class="auto-val">${esc(gd.autoOverlay)}<span class="auto-badge api">API</span></span></div>`;
+        // Spatialest building data
+        if(gd.epcBuilding){
+          const eb=gd.epcBuilding;
+          if(eb.sqft)h+=`<div class="auto-field"><span class="auto-label">Building sqft</span><span class="auto-val">${eb.sqft.toLocaleString()} sf<span class="auto-badge api">Assessor</span></span></div>`;
+          if(eb.yearBuilt)h+=`<div class="auto-field"><span class="auto-label">Year built</span><span class="auto-val">${eb.yearBuilt}<span class="auto-badge api">Assessor</span></span></div>`;
+          if(eb.beds)h+=`<div class="auto-field"><span class="auto-label">Bedrooms</span><span class="auto-val">${eb.beds}<span class="auto-badge api">Assessor</span></span></div>`;
+          if(eb.buildingUse)h+=`<div class="auto-field"><span class="auto-label">Building use</span><span class="auto-val">${esc(String(eb.buildingUse))}<span class="auto-badge api">Assessor</span></span></div>`;
+        }
         // Water/sewer infrastructure check row
         if(ST.epcInfraChecking){
           h+=`<div class="auto-field"><span class="auto-label">Water &amp; sewer</span><span class="auto-val"><span class="spinner"></span> Checking infrastructure…</span></div>`;
@@ -413,7 +439,7 @@ function render(){
       h+=`<p style="font-size:12px;color:#6B6B78;margin:0;">Contact El Paso County PCD to obtain the PUD plan for this property.</p></div>`;
       h+=`<div class="btn-row"><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`;
     }
-    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.25rem;"><p style="font-size:16px;font-weight:500;color:#F09595;margin:0 0 6px;">No pathways available</p><p style="font-size:13px;color:#F09595;margin:0;">No behavioral health or residential care uses are permitted in ${f.zone}.</p></div><div class="btn-row"><button class="btn-secondary" onclick="ST.pg=0;render()">Start over</button></div>`}
+    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No behavioral health or residential care uses are permitted in the <strong>${f.zone}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a Special Use application (if available for this use type).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
     else if(page.id==="licensing"){h+=`<p class="q-title">Licensing and certification</p><p class="q-sub">Can the operator obtain all required state licensing or certification?</p><div class="radio-row">${r3("licensing",f.licensing)}</div><div class="info-box">State licensing is required for mental illness and DD group homes (C.R.S. § 30-28-115). CARR certification is voluntary for recovery residences. The PCD Director memo (SP-05) does not waive state licensing requirements.</div><div class="btn-row">${bk}${f.licensing!==null?nx:""}</div>`}
     else if(page.id==="correctional"){h+=`<p class="q-title">Correctional supervision</p><p class="q-sub">Will the facility serve persons on probation or parole?</p><div class="radio-row">${r2("correctional",f.correctional)}</div><div class="field-help">Affects Half-Way House pathway eligibility and mental illness group home exclusion rules.</div><div class="btn-row">${bk}${f.correctional!==null?nx:""}</div>`}
     else if(page.id==="epcSexOffender"){h+=`<p class="q-title">Sex offender population</p><p class="q-sub">Will the facility include any person required to register as a sex offender (C.R.S. § 18-3-412.5)?</p><div class="radio-row">${r3("epcSexOffender",f.epcSexOffender)}</div><div class="field-help">Group homes may not include registered sex offenders unless related by blood, marriage, adoption, or in foster care (§ 5.2.17(C)(2)).</div><div class="btn-row">${bk}${f.epcSexOffender!==null?nx:""}</div>`}
@@ -431,13 +457,127 @@ function render(){
     else if(page.id==="maintained"){h+=`<p class="q-title">Continuously maintained?</p><p class="q-sub">Has the existing use been continuously maintained? Abandonment for 1 year means only conforming uses may resume (§ 5.6.3).</p><div class="radio-row">${r3("maintained",f.maintained)}</div><div class="btn-row">${bk}${f.maintained!==null?nx:""}</div>`}
     else if(page.id==="review"){h+=`<p class="q-title">Review and run</p><p class="q-sub">Confirm your inputs, then run the analysis.</p>`;h+=rFacts();h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="go()">Run analysis</button></div>`}
   }
+
+  /* ── MANITOU SPRINGS INTAKE PAGES ─────────────────────────────── */
+  if(ST.jurisdiction==="manitou"){
+    if(page.id==="manAddress"){
+      h+=`<p class="q-title">Property address</p>`;
+      h+=`<p class="q-sub">Enter a Manitou Springs address. The tool will query county assessor records, FEMA flood maps, and historic district data to auto-populate zone, building details, and site characteristics.</p>`;
+      if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped"){
+        h+=`<div class="addr-row"><input type="text" id="manAddrInput" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 606 Manitou Ave, 10 Old Man's Trail" /><button class="btn-primary addr-btn" onclick="manGisStart()">Look up</button></div>`;
+        if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip — enter manually</button></div>`}
+        else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('manAddrInput')?.value||null;advance()">Next</button></div>`}
+        else{h+=`<div class="field-help">Press "Look up" to geocode, or skip to enter all data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('manAddrInput')?.value||null;ST.gisPhase='skipped';advance()">Skip — enter manually</button></div>`}
+      }
+      else if(ST.gisPhase==="searching"){h+=`<div class="lookup-status"><span class="spinner"></span>Geocoding address\u2026</div>`}
+      else if(ST.gisPhase==="disambig"){
+        h+=`<div style="margin:12px 0;"><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">Multiple addresses matched. Select the correct one:</p><ul class="disambig-list">`;
+        ST.gisAddresses.forEach((a,i)=>{h+=`<li class="disambig-item" onclick="manGisSelect(${i})"><span class="disambig-addr">${esc(a.attributes?a.attributes.Match_addr:a.addr||"Unknown")}</span></li>`});
+        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.gisPhase='idle';render()">Try a different address</button></div>`;
+      }
+      else if(ST.gisPhase==="querying"){h+=`<div class="lookup-status"><span class="spinner"></span>Looking up property data\u2026</div>`}
+      else if(ST.gisPhase==="done"){
+        const gd=ST.gisData;
+        h+=`<div class="lookup-success"><div class="lk-title">${esc(gd.matchedAddr)}</div><div style="margin-top:8px;">`;
+        h+=`<div class="auto-field"><span class="auto-label">Zone district</span><span class="auto-val">${ST.manAutoZone?esc(ST.manAutoZone):"Not found"}${ST.manAutoZone&&MAN_ZL.includes(ST.manAutoZone)?'<span class="auto-badge api">Assessor</span>':'<span class="auto-badge" style="background:#5A4A20;color:#FBBF24;">Manual</span>'}</span></div>`;
+        if(ST.manAutoBuildingSqft)h+=`<div class="auto-field"><span class="auto-label">Building sqft (finished)</span><span class="auto-val">${ST.manAutoBuildingSqft.toLocaleString()} sf<span class="auto-badge api">Assessor</span></span></div>`;
+        if(ST.manAutoYearBuilt)h+=`<div class="auto-field"><span class="auto-label">Year built</span><span class="auto-val">${ST.manAutoYearBuilt}<span class="auto-badge api">Assessor</span></span></div>`;
+        if(ST.manAutoBeds)h+=`<div class="auto-field"><span class="auto-label">Bedrooms</span><span class="auto-val">${ST.manAutoBeds}<span class="auto-badge api">Assessor</span></span></div>`;
+        if(ST.manAutoLotSize)h+=`<div class="auto-field"><span class="auto-label">Lot size</span><span class="auto-val">${ST.manAutoLotSize.toLocaleString()} sf<span class="auto-badge api">Assessor</span></span></div>`;
+        if(ST.manAutoParcelId)h+=`<div class="auto-field"><span class="auto-label">Parcel</span><span class="auto-val">${ST.manAutoParcelId}${ST.manAutoAssessorLink?' <a href="'+ST.manAutoAssessorLink+'" target="_blank" rel="noopener" style="color:#6EA4E8;font-size:11px;">Assessor &#8599;</a>':''}</span></div>`;
+        // FEMA flood hazard
+        const hazLabel=ST.manAutoHazard==="yes"?"&#9888; Flood hazard zone":ST.manAutoHazard==="no"?"No flood hazard":"Unknown";
+        const hazColor=ST.manAutoHazard==="yes"?"#FBBF24":ST.manAutoHazard==="no"?"#4ADE80":"#9B9BA7";
+        h+=`<div class="auto-field"><span class="auto-label">FEMA flood status</span><span class="auto-val" style="color:${hazColor};">${hazLabel}<span class="auto-badge api">FEMA</span></span></div>`;
+        // Historic district
+        const histLabel=ST.manAutoHistoric==="yes"?"Historic District":ST.manAutoHistoric==="no"?"Not in Historic District":"Unknown";
+        const histColor=ST.manAutoHistoric==="yes"?"#FBBF24":ST.manAutoHistoric==="no"?"#4ADE80":"#9B9BA7";
+        h+=`<div class="auto-field"><span class="auto-label">Historic district</span><span class="auto-val" style="color:${histColor};">${histLabel}<span class="auto-badge api">NPS</span></span></div>`;
+        // Title 15 cap calculation
+        if(ST.manAutoBuildingSqft){
+          const cap=manTitle15Cap(ST.manAutoBuildingSqft);
+          h+=`<div class="auto-field"><span class="auto-label">Title 15 occupancy cap</span><span class="auto-val">${cap} persons (based on ${ST.manAutoBuildingSqft.toLocaleString()} sf)<span class="auto-badge" style="background:#1A3D28;color:#4ADE80;">Calculated</span></span></div>`;
+        }
+        h+=`</div></div>`;
+        h+=`<div class="data-caveats">Zone and building data from El Paso County Assessor via Spatialest. Building sqft is total finished living area (assessor proxy for IBC gross floor area — may differ from actual GFA). Flood data from FEMA NFHL. Historic district from NPS National Register. Verify all values with the City of Manitou Springs Planning Department.</div>`;
+        h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="advance()">Accept and continue</button></div>`;
+      }
+      APP.innerHTML=h;
+      const addrInput=document.getElementById("manAddrInput");
+      if(addrInput){if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped")addrInput.focus();addrInput.addEventListener("keydown",e=>{if(e.key==="Enter")manGisStart()})}
+      return;
+    }
+    else if(page.id==="manZone"){
+      const autoSrc=ST.gisPhase==="done"&&ST.manAutoZone&&MAN_ZL.includes(f.zone||"");
+      h+=`<p class="q-title">Zone district</p><p class="q-sub">`;
+      if(autoSrc)h+=`Auto-populated from assessor records. Confirm or change.`;else h+=`Select the zone district for this property.`;
+      h+=`</p><select class="zs" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
+      for(const[gn,gd] of Object.entries(MAN_ZG)){h+=`<optgroup label="${gn}">`;gd.list.forEach(z=>{h+=`<option value="${z}" ${f.zone===z?"selected":""}>${z}</option>`});h+=`</optgroup>`}
+      h+=`</select>`;
+      if(autoSrc)h+=`<div class="field-help" style="color:#4ADE80;">Source: El Paso County Assessor (Spatialest) <span class="auto-badge api" style="vertical-align:middle;">API</span></div>`;
+      else h+=`<a class="gis-link" href="${MAN_ZMAP}" target="_blank" rel="noopener">Open Manitou Springs zoning map &#8599;</a>`;
+      h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
+    }
+    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No behavioral health or residential care uses are permitted in the <strong>${f.zone}</strong> zone district. Open Space, Parks, and Public Facilities zones do not allow residential or institutional uses.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application ($1,090).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
+    else if(page.id==="manTreatment"){
+      h+=`<p class="q-title">On-site treatment</p><p class="q-sub">Will the facility provide on-site medical treatment for substance use disorders (SUD)?</p>`;
+      h+=`<div class="radio-row">${r3("manOnSiteTreatment",f.manOnSiteTreatment)}</div>`;
+      h+=`<div class="field-help">On-site treatment (e.g. MAT, detox protocols) disqualifies the Group Home — Small classification, routing to larger or institutional pathways. (G-01)</div>`;
+      h+=`<div class="btn-row">${bk}${f.manOnSiteTreatment!==null?nx:""}</div>`;
+    }
+    else if(page.id==="manPopulation"){
+      h+=`<p class="q-title">Population type</p><p class="q-sub">Select the primary population served.</p>`;
+      h+=`<div class="radio-row">`;
+      ["behavioral","elderly","disabled","mixed"].forEach(v=>{
+        const label=v==="behavioral"?"Behavioral health / SUD":v==="elderly"?"Elderly (age 60+)":v==="disabled"?"Persons with disabilities":"Mixed / other";
+        h+=`<button class="radio-btn ${f.manPopulationType===v?"sel":""}" onclick="ST.form.manPopulationType='${v}';render()">${label}</button>`;
+      });
+      h+=`</div>`;
+      h+=`<div class="field-help">Elderly population enables CCRC pathway. FHA-protected populations (elderly, disabled) have reasonable accommodation rights that may relax certain land-use restrictions. (G-02)</div>`;
+      h+=`<div class="btn-row">${bk}${f.manPopulationType?nx:""}</div>`;
+    }
+    else if(page.id==="manOperations"){
+      h+=`<p class="q-title">Operational characteristics</p><p class="q-sub">These details determine which pathways are available.</p>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Overnight beds?</label><div class="radio-row">${r2("manOvernightBeds",f.manOvernightBeds)}</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Provides medical care?</label><div class="radio-row">${r2("manProvidesMedCare",f.manProvidesMedCare)}</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Provides personal care (bathing, dressing, ADLs)?</label><div class="radio-row">${r2("manProvidesPersonalCare",f.manProvidesPersonalCare)}</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Full-time nursing staff?</label><div class="radio-row">${r2("manFullTimeNursing",f.manFullTimeNursing)}</div></div>`;
+      h+=`<div class="field-help">Medical care gates the Medical Care Facility pathway. Personal care gates the Boarding House pathway (excluded if personal care provided). Full-time nursing is required for LTC pathway.</div>`;
+      const allAnswered=f.manOvernightBeds!==null&&f.manProvidesMedCare!==null&&f.manProvidesPersonalCare!==null&&f.manFullTimeNursing!==null;
+      h+=`<div class="btn-row">${bk}${allAnswered?nx:""}</div>`;
+    }
+    else if(page.id==="manConstruction"){
+      h+=`<p class="q-title">Construction scope</p><p class="q-sub">Select the scope of physical work planned for this property. This determines whether a Development Plan is required and which review level applies. (§ 18.06.4.12–13)</p>`;
+      h+=`<div class="radio-row">`;
+      ["none","minor","major"].forEach(v=>{
+        const label=v==="none"?"None — change of use only; no exterior construction, additions, or site work"
+          :v==="minor"?"Minor — additions up to 1,000 sf; parking or landscaping changes; fa\u00e7ade modifications; interior renovation with exterior impact (§ 18.06.4.12)"
+          :"Major — new building construction; additions over 1,000 sf; site layout changes affecting drainage or access; or new subdivision (§ 18.06.4.13)";
+        h+=`<button class="radio-btn ${f.manConstructionScope===v?"sel":""}" onclick="ST.form.manConstructionScope='${v}';render()">${label}</button>`;
+      });
+      h+=`</div>`;
+      h+=`<div class="field-help"><strong>None:</strong> No development plan required. <strong>Minor:</strong> Minor Development Plan — Planning Commission review. <strong>Major:</strong> Major Development Plan — Planning Commission + City Council hearings. The 1,000 sf threshold is the boundary between minor and major.</div>`;
+      h+=`<div class="btn-row">${bk}${f.manConstructionScope?nx:""}</div>`;
+    }
+    else if(page.id==="existingRC"){h+=`<p class="q-title">Existing group home or BH use</p><p class="q-sub">Is there an existing group home, boarding house, or behavioral health use on this property?</p><div class="radio-row">${r3("existingRC",f.existingRC)}</div><div class="btn-row">${bk}${f.existingRC!==null?nx:""}</div>`}
+    else if(page.id==="maintained"){h+=`<p class="q-title">Continuously maintained?</p><p class="q-sub">Has the existing use been continuously maintained? Discontinuance for 12+ months terminates nonconforming status. (§ 18.40)</p><div class="radio-row">${r3("maintained",f.maintained)}</div><div class="btn-row">${bk}${f.maintained!==null?nx:""}</div>`}
+    else if(page.id==="manPreexisting"){
+      h+=`<p class="q-title">Nonconforming use details</p><p class="q-sub">These determine the nonconforming use pathway analysis.</p>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Months since use discontinued (if any)</label><input type="number" id="man-months" value="${f.manMonthsDiscontinued===null?"":f.manMonthsDiscontinued}" placeholder="0 if currently operating" min="0" style="width:180px;"></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Proposing expansion of use?</label><div class="radio-row">${r2("manProposedExpansion",f.manProposedExpansion)}</div></div>`;
+      h+=`<div class="field-help">G-03: Discontinuance for 12+ months terminates nonconforming status. G-04: Expansion of a nonconforming use is prohibited.</div>`;
+      h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="var m=document.getElementById('man-months').value;ST.form.manMonthsDiscontinued=m===''?null:Number(m);advance()">Next</button></div>`;
+    }
+    else if(page.id==="review"){h+=`<p class="q-title">Review and run</p><p class="q-sub">Confirm your inputs, then run the analysis.</p>`;h+=rFacts();h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="go()">Run analysis</button></div>`}
+  }
+
   APP.innerHTML=h;
 }
 
 /* ── Review Facts Helper ──────────────────────────────────────── */
 function rFacts(){
   const f=ST.form;
-  const jurName=ST.jurisdiction==="denver"?"Denver":ST.jurisdiction==="cos"?"Colorado Springs":"El Paso County";
+  const jurName=ST.jurisdiction==="denver"?"Denver":ST.jurisdiction==="cos"?"Colorado Springs":ST.jurisdiction==="manitou"?"Manitou Springs":"El Paso County";
   const items=[["Jurisdiction",jurName],["Address",esc(f.address)||"\u2014"],["Zone",f.zone||"\u2014"]];
   if(f.lotSize!=null)items.push(["Lot size",f.lotSize.toLocaleString()+" sf"]);
   items.push(["Licensing",f.licensing||"\u2014"]);
@@ -462,6 +602,25 @@ function rFacts(){
     // Water/sewer infrastructure
     const infraVal=ST.epcInfraStatus==="district"?"District-served"+(ST.epcInfraDistrict?" — "+ST.epcInfraDistrict:""):ST.epcInfraStatus==="well-septic"?"Private well & septic":ST.epcInfraStatus==="unknown"?"Unknown — verify with Assessor":"Not checked";
     items.push(["Water & sewer",infraVal]);
+  } else if(ST.jurisdiction==="manitou"){
+    if(f.manDwellingUnitSqft!=null){items.push(["Building sqft",f.manDwellingUnitSqft.toLocaleString()+" sf"]);const cap=manTitle15Cap(f.manDwellingUnitSqft);if(cap!==null)items.push(["Title 15 cap",cap+" persons"])}
+    if(ST.manAutoYearBuilt)items.push(["Year built",String(ST.manAutoYearBuilt)]);
+    if(ST.manAutoBeds)items.push(["Bedrooms",String(ST.manAutoBeds)]);
+    items.push(["On-site treatment",f.manOnSiteTreatment||"\u2014"]);
+    items.push(["Population",f.manPopulationType||"\u2014"]);
+    items.push(["Overnight beds",f.manOvernightBeds||"\u2014"]);
+    items.push(["Medical care",f.manProvidesMedCare||"\u2014"]);
+    items.push(["Personal care",f.manProvidesPersonalCare||"\u2014"]);
+    items.push(["Full-time nursing",f.manFullTimeNursing||"\u2014"]);
+    items.push(["Flood hazard",f.manNaturalHazard==="yes"?"Yes (FEMA)":f.manNaturalHazard==="no"?"No (FEMA)":"Unknown"]);
+    items.push(["Historic district",f.manHistoricDistrict==="yes"?"Yes (NPS)":f.manHistoricDistrict==="no"?"No (NPS)":"Unknown"]);
+    items.push(["Construction",f.manConstructionScope||"\u2014"]);
+    items.push(["Existing use",f.existingRC||"\u2014"]);
+    if(f.existingRC==="yes"){
+      items.push(["Maintained",f.maintained||"\u2014"]);
+      if(f.manMonthsDiscontinued!=null)items.push(["Months discontinued",String(f.manMonthsDiscontinued)]);
+      items.push(["Proposed expansion",f.manProposedExpansion||"\u2014"]);
+    }
   } else {
     items.push(["Correctional",f.correctional||"\u2014"],["FHA-protected",f.fhaProtected||"\u2014"],["24-hour",f.op24hr||"\u2014"]);
     if(f.targetOver60)items.push(["Over 60 population","Yes"]);
@@ -487,6 +646,7 @@ function go(){
   }
   if(ST.jurisdiction==="denver")ST.results=runEngine(ST.form);
   else if(ST.jurisdiction==="epc")ST.results=runEPCEngine(ST.form);
+  else if(ST.jurisdiction==="manitou")ST.results=runManitouEngine(ST.form);
   else ST.results=runCOSEngine(ST.form);
   ST.activeTab="dashboard";ST.expanded={};ST.checklistState={};
   history.replaceState(null,"",stateToHash());
@@ -497,14 +657,14 @@ function go(){
    RESULTS RENDERER (shared — handles all jurisdictions)
    ═══════════════════════════════════════════════════════════════════ */
 function renderRes(){
-  const R=ST.results;if(R.error){APP.innerHTML=`<div><p style="color:#F09595;font-weight:500;">${R.error}</p><div class="btn-row"><button class="btn-secondary" onclick="ST.results=null;ST.pg=0;render()">Back</button></div></div>`;return}
-  const vi=R.results.filter(r=>r.v==="yes"),co=R.results.filter(r=>r.v==="conditional"),nv=R.results.filter(r=>r.v==="no");
+  const R=ST.results;if(R.error){APP.innerHTML=`<div style="padding:1rem 0;"><div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">${R.error}</p><p style="font-size:13px;color:#9B9BA7;margin:0;">The intended use is prohibited under the applicable rules. No viable pathway exists, and continuing the analysis is unnecessary because this result is dispositive.</p></div><div class="btn-row" style="margin-top:16px;"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.results=null;ST.pg=0;render()">Back to inputs</button></div></div>`;return}
+  const vi=R.results.filter(r=>r.v==="yes"||r.v==="conditional"),nv=R.results.filter(r=>r.v==="no");
   let best=0;vi.forEach(r=>{const n=r.mg===999?9999:(r.mg||0);if(n>best)best=n});
   const bL=best===9999?"No UDC cap":best===0?"\u2014":String(best);
-  const viCo=R.results.filter(r=>r.v==="yes"||r.v==="conditional");
+  const viCo=vi; // vi already includes conditional (merged per Bug 7)
   const allC=[];viCo.forEach(r=>r.cav.forEach(c=>{if(!allC.find(x=>x.msg===c.msg))allC.push({...c,paths:viCo.filter(r2=>r2.cav.find(c2=>c2.msg===c.msg)).map(r2=>r2.nm)})}));
   const blk=allC.filter(c=>c.blocking).length;
-  const jurLabel=ST.jurisdiction==="denver"?"Denver":ST.jurisdiction==="cos"?"Colorado Springs":"El Paso County";
+  const jurLabel=ST.jurisdiction==="denver"?"Denver":ST.jurisdiction==="cos"?"Colorado Springs":ST.jurisdiction==="manitou"?"Manitou Springs":"El Paso County";
   let h=`<div class="dash-header"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><div><p class="dash-title">${esc(ST.form.address)||"Analysis"}</p><p class="dash-sub">${R.zone}${ST.form.lotSize?" · "+ST.form.lotSize.toLocaleString()+" sf":""} · ${jurLabel}</p></div><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn-secondary" onclick="shareURL()" style="padding:6px 12px;font-size:12px;">Share</button><button class="btn-secondary" onclick="doSave()" style="padding:6px 12px;font-size:12px;">Save</button><button class="btn-secondary" onclick="window.print()" style="padding:6px 12px;font-size:12px;">Print / PDF</button><button class="btn-secondary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()" style="padding:6px 12px;font-size:12px;">New analysis</button></div></div></div>`;
   // Change monitoring banner
   const _vd=ENGINE_VERIFIED[ST.jurisdiction];if(_vd){const _ds=Math.floor((Date.now()-new Date(_vd).getTime())/864e5);if(_ds>90)h+=`<div style="background:#2E2410;border:1px solid #5A4A20;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:12px;color:#FBBF24;">&#9888; Engine rules last verified ${_ds} days ago (${_vd}). Code changes may have occurred. Review before relying on results.</div>`}
@@ -529,7 +689,7 @@ function renderRes(){
       if(isWell)h+=`<div style="font-size:11px;color:#555568;margin-top:4px;">Water supply and OWTS capacity may limit max bed count independent of zoning approval. Run water/wastewater analysis for this address.</div>`;
       h+=`</div></div>`;
     }
-    if(vi.length)h+=`<p class="section-label">Viable</p>`+vi.map(pwC).join("");if(co.length)h+=`<p class="section-label">Conditional</p>`+co.map(pwC).join("");if(nv.length)h+=`<p class="section-label">Not viable</p>`+nv.map(pwC).join("")}
+    if(vi.length)h+=`<p class="section-label">Viable</p>`+vi.map(pwC).join("");if(nv.length)h+=`<p class="section-label">Not Viable</p>`+nv.map(pwC).join("")}
   else if(ST.activeTab==="caveats"){if(!allC.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No open caveats on viable pathways.</p>`;else allC.forEach(c=>{h+=`<div class="caveat-card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span>${citeLink(c.cite)}</div><p class="caveat-title">${c.msg}</p><p class="caveat-meta"><strong>Affects:</strong> ${c.paths.join(", ")}</p>${c.resolve?`<p class="caveat-meta"><strong>Resolve:</strong> ${c.resolve}</p>`:""}</div>`})}
   else if(ST.activeTab==="costs"){
     h+=`<p class="section-label">Cost Estimates by Viable Pathway</p>`;
@@ -584,7 +744,7 @@ function renderRes(){
 }
 
 function pwC(r){
-  const bc=r.v==="yes"?"badge-yes":r.v==="conditional"?"badge-cond":"badge-no",bt=r.v==="yes"?"Viable":r.v==="conditional"?"Conditional":"Not viable";
+  const bc=r.v==="no"?"badge-no":"badge-yes",bt=r.v==="no"?"Not Viable":"Viable";
   let ct="";if(r.v!=="no"){if(r.mg===999)ct="no cap";else if(!r.mg)ct="TBD";else ct="up to "+r.mg+" residents"}
   const isO=ST.expanded[r.id]||false;let d="";
   if(r.v!=="no"){
@@ -654,6 +814,24 @@ function getPathwayDocs(r){
     docs.push({name:"Proof of property ownership or lease",required:true});
     docs.push({name:"Fire code compliance documentation",required:false});
     docs.push({name:"Water/wastewater capacity documentation (if well/septic)",required:ST.epcInfraStatus==="well-septic"});
+  } else if(jur==="manitou"){
+    if(proc.includes("CUP")){
+      docs.push({name:"Conditional Use Permit application ($1,090)",required:true});
+      docs.push({name:"Public notice: sign on property + mail to owners within 300 ft",required:true});
+    }
+    if(proc.includes("Major")||proc.includes("MJR")){
+      docs.push({name:"Major Development Plan application ($1,200–$1,450 + $1,000 deposit)",required:true});
+    } else if(proc.includes("Minor")||proc.includes("MNR")){
+      docs.push({name:"Minor Development Plan application ($600–$700 + $950 deposit)",required:true});
+    }
+    docs.push({name:"Site plan with dimensions",required:true});
+    docs.push({name:"Written description of proposed use and operational plan",required:true});
+    docs.push({name:"Copy of state license or certification",required:true});
+    docs.push({name:"Floor plan showing bed count and common areas",required:true});
+    docs.push({name:"Proof of property ownership or lease",required:true});
+    docs.push({name:"Business license application",required:true});
+    docs.push({name:"Fire code compliance / sprinkler documentation (if > 16 persons)",required:false});
+    if(ST.manAutoHistoric==="yes")docs.push({name:"MCAC application for exterior modifications (Title 17)",required:true});
   }
   return docs;
 }
@@ -684,7 +862,7 @@ function renderSavedList(){
   if(canCompare)h+=`<div style="margin-bottom:12px;"><button class="btn-primary" onclick="ST.showSaved=false;ST.showCompare=true;render()" style="padding:8px 20px;">Compare (${ST.compareIds.length})</button></div>`;
   list.forEach(a=>{
     const d=new Date(a.ts);const ds=d.toLocaleDateString()+" "+d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
-    const jurN=a.jurisdiction==="denver"?"Denver":a.jurisdiction==="cos"?"COS":"EPC";
+    const jurN=a.jurisdiction==="denver"?"Denver":a.jurisdiction==="cos"?"COS":a.jurisdiction==="manitou"?"Manitou":"EPC";
     const isChecked=ST.compareIds.includes(a.id);
     h+=`<div style="background:#151520;border:1px solid #2A2A3A;border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">`;
     h+=`<input type="checkbox" ${isChecked?"checked":""} onchange="toggleCompare('${a.id}')" style="flex-shrink:0;width:18px;height:18px;cursor:pointer;">`;
@@ -717,6 +895,7 @@ function renderComparison(){
     let R;
     if(a.jurisdiction==="denver")R=runEngine(form);
     else if(a.jurisdiction==="epc")R=runEPCEngine(form);
+    else if(a.jurisdiction==="manitou")R=runManitouEngine(form);
     else R=runCOSEngine(form);
     return{analysis:a,results:R};
   });
@@ -726,7 +905,7 @@ function renderComparison(){
   results.forEach(r=>{h+=`<th style="text-align:center;padding:8px;border-bottom:1px solid #2A2A3A;color:#E8E8EC;min-width:150px;">${esc(r.analysis.address||"No address")}</th>`});
   h+=`</tr></thead><tbody>`;
   const rows=[
-    ["Jurisdiction",r=>({denver:"Denver",cos:"Colorado Springs",epc:"El Paso County"})[r.analysis.jurisdiction]],
+    ["Jurisdiction",r=>({denver:"Denver",cos:"Colorado Springs",epc:"El Paso County",manitou:"Manitou Springs"})[r.analysis.jurisdiction]],
     ["Zone",r=>r.analysis.zone||"\u2014"],
     ["Viable",r=>{const n=r.results.error?0:r.results.results.filter(x=>x.v==="yes").length;return`<span style="color:${n>0?"#4ADE80":"#F09595"};font-weight:600;">${n}</span>`}],
     ["Max beds",r=>{if(r.results.error)return"\u2014";const vi=r.results.results.filter(x=>x.v==="yes");let best=0;vi.forEach(x=>{const n=x.mg===999?9999:(x.mg||0);if(n>best)best=n});return best===9999?"No cap":best===0?"\u2014":String(best)}],
@@ -758,8 +937,8 @@ function renderGlossary(){
   const entries=Object.entries(GLOSSARY).sort((a,b)=>a[0].localeCompare(b[0]));
   const filterJur=ST.glossaryFilter||"all";
   h+=`<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">`;
-  ["all","denver","cos","epc"].forEach(j=>{
-    const label=j==="all"?"All":j==="denver"?"Denver":j==="cos"?"COS":"EPC";
+  ["all","denver","cos","epc","manitou"].forEach(j=>{
+    const label=j==="all"?"All":j==="denver"?"Denver":j==="cos"?"COS":j==="manitou"?"Manitou":"EPC";
     h+=`<button class="btn-secondary" onclick="ST.glossaryFilter='${j}';render()" style="padding:4px 12px;font-size:12px;${filterJur===j?"background:#2A2A4A;color:#8AA8D8;":""}">${label}</button>`;
   });
   h+=`</div>`;

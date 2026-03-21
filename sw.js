@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pathway-v18';
+const CACHE_NAME = 'pathway-v19';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './js/engine-denver.js',
   './js/engine-cos.js',
   './js/engine-epc.js',
+  './js/engine-manitou.js',
   './js/gis.js',
   './js/glossary.js',
   './js/ui.js',
@@ -46,6 +47,18 @@ self.addEventListener('fetch', e => {
 
   // Colorado state API calls: always go to network
   if (url.hostname.includes('dwr.state.co.us') || url.hostname.includes('gis.colorado.gov')) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+
+  // Spatialest property record API: always go to network
+  if (url.hostname.includes('spatialest.com')) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+
+  // FEMA hazard layers: always go to network
+  if (url.hostname.includes('fema.gov')) {
     e.respondWith(fetch(e.request));
     return;
   }

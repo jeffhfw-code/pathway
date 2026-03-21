@@ -278,6 +278,15 @@ async function epcGisRun(candidate){
     const parcelId=parcel?parcel.PARCEL:null;
     const assessorLink=parcel?parcel.HYPERLINK:null;
 
+    // Spatialest enrichment — building sqft, year built, beds
+    let epcBuilding={sqft:null,yearBuilt:null,beds:null,baths:null,buildingUse:null};
+    if(parcelId){
+      try{
+        const spaRes=await fetch(`${SPATIALEST_API}/${parcelId}`);
+        if(spaRes.ok){const spaData=await spaRes.json();const sp=parseSpatialest(spaData);epcBuilding={sqft:sp.sqft,yearBuilt:sp.yearBuilt,beds:sp.beds,baths:sp.baths,buildingUse:sp.buildingUse||sp.zone}}
+      }catch(e){console.warn("Spatialest lookup failed for EPC:",e)}
+    }
+
     let cityWarning=null;
     if(cityName&&autoZone){
       cityWarning="Zone returned as "+autoZone+", but address is inside "+cityName+". The EPC zoning layer may overlap incorporated boundaries. Verify with PCD whether this property is governed by EPC or "+cityName+" zoning.";
@@ -296,7 +305,7 @@ async function epcGisRun(candidate){
     ST.epcAutoNearestFacName=epcNearest?epcNearest.name:null;
     if(epcNearest)ST.form.epcSeparation=epcNearest.ft;
 
-    ST.gisData={matchedAddr:candidate.attributes.Match_addr,lat,lon,autoZone,autoLot,autoOverlay,parcelId,assessorLink,cityName,cityWarning};
+    ST.gisData={matchedAddr:candidate.attributes.Match_addr,lat,lon,autoZone,autoLot,autoOverlay,parcelId,assessorLink,cityName,cityWarning,epcBuilding};
     ST.gisAutoZone=autoZone;
     ST.gisAutoLot=autoLot;
     if(autoZone&&EPC_ZL.includes(autoZone)&&!cityName)ST.form.zone=autoZone;
@@ -373,3 +382,137 @@ async function epcWaterSewerCheck(addressStr,lat,lon){
   }
   ST.epcInfraChecking=false;render();
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MANITOU SPRINGS GIS — Geocode → EPC Parcel → Spatialest → FEMA → Historic
+   ═══════════════════════════════════════════════════════════════════ */
+async function manFindCandidates(raw){
+  const q=encodeURIComponent(raw.replace(/,?\s*(manitou\s*springs|CO|Colorado|\d{5}(-\d{4})?)[\s,]*/gi," ").trim());
+  const url=`${MAN_GEOCODE}?SingleLine=${q}&searchExtent=${MAN_BBOX}&outFields=Addr_type,Match_addr,StAddr&maxLocations=5&f=json`;
+  const res=await fetch(url);const data=await res.json();
+  return(data.candidates||[]).filter(c=>c.score>=80);
+}
+
+/* ── Spatialest record card parser ─────────────────────────────── */
+function parseSpatialest(data){
+  const result={zone:null,sqft:null,yearBuilt:null,beds:null,baths:null,lotSize:null,buildingUse:null,stories:null};
+  if(!data||!data.parcel)return result;
+  const p=data.parcel;
+  // Zone: sections[0][0][0].zone
+  try{result.zone=p.sections["0"][0][0].zone||null}catch(e){}
+  // Building data — residential (sections[2] first array)
+  try{
+    const bldg=p.sections["2"][0][0];
+    if(bldg){
+      if(bldg.AboveGradeArea!=null)result.sqft=(Number(bldg.AboveGradeArea)||0)+(Number(bldg.FinishedBSMT)||0);
+      if(bldg.yr_blt!=null)result.yearBuilt=Number(bldg.yr_blt)||null;
+      if(bldg.Beds!=null)result.beds=Number(bldg.Beds)||null;
+      if(bldg.Baths!=null)result.baths=bldg.Baths;
+      if(bldg.ResStyle)result.buildingUse=bldg.ResStyle;
+    }
+  }catch(e){}
+  // Building data — commercial fallback (sections[2] second array)
+  if(result.sqft===null){
+    try{
+      const comm=p.sections["2"][1][0];
+      if(comm&&comm.bldarea){result.sqft=Number(comm.bldarea)||null;result.buildingUse=comm.occ1||"Commercial"}
+      if(comm&&comm.yr_blt)result.yearBuilt=Number(comm.yr_blt)||null;
+    }catch(e){}
+  }
+  // Land data — lot size
+  try{
+    const land=p.sections["1"][0][0];
+    if(land&&land.DisplayArea){
+      const m=String(land.DisplayArea).match(/([\d,]+)\s*SQFT/i);
+      if(m)result.lotSize=Number(m[1].replace(/,/g,""))||null;
+      else{
+        const ac=String(land.DisplayArea).match(/([\d.]+)\s*Acre/i);
+        if(ac)result.lotSize=Math.round(Number(ac[1])*43560)||null;
+      }
+    }
+  }catch(e){}
+  return result;
+}
+
+async function manGisRun(candidate){
+  setGisPhase("querying");render();
+  const lon=candidate.location.x,lat=candidate.location.y;
+  // Bug 1 fix: use StAddr (has street number) if available, else Match_addr
+  const displayAddr=candidate.attributes.StAddr||candidate.attributes.Match_addr;
+  const origAddr=ST.form.address; // preserve user-typed address as fallback
+  try{
+    const geom=`${lon},${lat}`;
+    // Step 1: Query EPC parcel layer (MUST pass inSR=4326 for WGS84 coordinates)
+    const parcelUrl=`${EPC_GIS_PARCEL}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=PARCEL,HYPERLINK,Shape.STArea()&returnGeometry=false&f=json`;
+    const parcelRes=await fetch(parcelUrl);const parcelData=await parcelRes.json();
+    let parcel=null;
+    if(parcelData.features?.length===1)parcel=parcelData.features[0].attributes;
+    else if(parcelData.features?.length>1)parcel=parcelData.features.map(f=>f.attributes).sort((a,b)=>(b["Shape.STArea()"]||0)-(a["Shape.STArea()"]||0))[0];
+
+    const parcelId=parcel?parcel.PARCEL:null;
+    const assessorLink=parcel?parcel.HYPERLINK:null;
+    ST.manAutoParcelId=parcelId;
+    ST.manAutoAssessorLink=assessorLink;
+
+    // Step 2: Call Spatialest record card API
+    let spa={zone:null,sqft:null,yearBuilt:null,beds:null,baths:null,lotSize:null,buildingUse:null};
+    if(parcelId){
+      try{
+        const spaRes=await fetch(`${SPATIALEST_API}/${parcelId}`);
+        if(spaRes.ok){const spaData=await spaRes.json();spa=parseSpatialest(spaData)}
+      }catch(e){console.warn("Spatialest lookup failed:",e)}
+    }
+
+    // Step 3: Query FEMA NFHL for flood hazard
+    let hazardStatus="unknown";
+    try{
+      const femaUrl=`${FEMA_NFHL}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=FLD_ZONE,ZONE_SUBTY&returnGeometry=false&f=json`;
+      const femaRes=await fetch(femaUrl);const femaData=await femaRes.json();
+      if(femaData.features?.length){
+        const fz=femaData.features[0].attributes.FLD_ZONE;
+        // A, AE, AH, AO, V, VE = high risk; X (shaded) = moderate; X (unshaded), D = minimal
+        if(["A","AE","AH","AO","V","VE","AR"].includes(fz))hazardStatus="yes";
+        else hazardStatus="no";
+      } else {hazardStatus="no"}
+    }catch(e){console.warn("FEMA NFHL lookup failed:",e)}
+
+    // Step 4: Query NPS National Register Historic Districts
+    let historicStatus="unknown";
+    try{
+      const npsUrl=`${NPS_HISTORIC}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=RESNAME&returnGeometry=false&f=json`;
+      const npsRes=await fetch(npsUrl);const npsData=await npsRes.json();
+      if(npsData.features?.length)historicStatus="yes";
+      else historicStatus="no";
+    }catch(e){console.warn("NPS Historic Districts lookup failed:",e)}
+
+    // Store auto-determined values in state
+    ST.manAutoZone=spa.zone;
+    ST.manAutoBuildingSqft=spa.sqft;
+    ST.manAutoYearBuilt=spa.yearBuilt;
+    ST.manAutoLotSize=spa.lotSize;
+    ST.manAutoBeds=spa.beds;
+    ST.manAutoHazard=hazardStatus;
+    ST.manAutoHistoric=historicStatus;
+    ST.manAutoBuildingUse=spa.buildingUse;
+
+    // Auto-populate form fields
+    if(spa.zone&&MAN_ZL.includes(spa.zone))ST.form.zone=spa.zone;
+    if(spa.sqft)ST.form.manDwellingUnitSqft=spa.sqft;
+    if(spa.lotSize)ST.form.lotSize=spa.lotSize;
+    ST.form.manNaturalHazard=hazardStatus;
+    ST.form.manHistoricDistrict=historicStatus;
+    // Address: use StAddr (has number) or fall back to user input
+    ST.form.address=displayAddr||origAddr;
+    ST.gisData={matchedAddr:displayAddr||origAddr,lat,lon,parcelId,assessorLink,autoZone:spa.zone,autoLot:spa.lotSize};
+    ST.gisAutoZone=spa.zone;
+    ST.gisAutoLot=spa.lotSize;
+    setGisPhase("done");render();
+  }catch(err){
+    setGisPhase("error");
+    ST.gisError="Property lookup failed: "+(err.message||err)+". You can skip and enter data manually.";
+    render();
+  }
+}
+
+function manGisStart(){gisUnifiedStart("manAddrInput",manFindCandidates,manGisRun,"Manitou Springs")}
+function manGisSelect(idx){gisUnifiedSelect(idx,manGisRun)}
