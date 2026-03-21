@@ -639,12 +639,14 @@ function getPathwayDocs(r){
     if(proc.includes("Special Use")){
       docs.push({name:"Special Use application ($6,401)",required:true});
       docs.push({name:"Adjacent owner notification documentation",required:true});
+      docs.push({name:"Agency referral response documentation",required:false});
       docs.push({name:"FHAA reasonable accommodation documentation",required:r.id.startsWith("GH")});
     } else {
       docs.push({name:"Group Home Permit application ($192)",required:r.id.startsWith("GH")});
       docs.push({name:"Site Development Plan application ($1,685–$3,955)",required:!r.id.startsWith("GH")});
     }
     docs.push({name:"Residential site plan ($165)",required:r.id.startsWith("GH")});
+    if(r.id.startsWith("GH"))docs.push({name:"SP-05 enforcement policy confirmation from PCD",required:false});
     docs.push({name:"Copy of all applicable state licenses",required:true});
     docs.push({name:"Floor plan showing bedrooms and common areas",required:true});
     docs.push({name:"Written description of proposed operations",required:true});
