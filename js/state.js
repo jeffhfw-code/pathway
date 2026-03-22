@@ -12,7 +12,13 @@ function createDefaultForm(){
     targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],
     distGLRDetox:null,nearestAL:null,
     // EPC-specific
-    epcSexOffender:null,epcNonprofit:null,epcSeparation:null,epcCadO:null
+    epcSexOffender:null,epcNonprofit:null,epcSeparation:null,epcCadO:null,
+    // Manitou Springs-specific
+    manOnSiteTreatment:null,manPopulationType:null,manOvernightBeds:null,
+    manProvidesMedCare:null,manProvidesPersonalCare:null,manFullTimeNursing:null,
+    manPreexistingUse:null,manMonthsDiscontinued:null,manProposedExpansion:null,
+    manNaturalHazard:null,manHistoricDistrict:null,manConstructionScope:null,
+    manDwellingUnitSqft:null
   },FORM_DEFAULTS);
 }
 
@@ -22,6 +28,7 @@ function createDefaultState(){
     pg:0,
     form:createDefaultForm(),
     results:null,activeTab:"dashboard",expanded:{},
+    showSaved:false,showCompare:false,showGlossary:false,compareIds:[],checklistState:{},glossaryFilter:"all",
     gisPhase:"idle",gisError:null,gisAddresses:null,gisData:null,
     gisAutoZone:null,gisAutoLot:null,gisAutoRC:null,gisAutoRC34:null,
     gisAutoDist34:null,gisOverrides:{},
@@ -32,7 +39,12 @@ function createDefaultState(){
     // EPC infrastructure
     epcInfraStatus:null,epcInfraDistrict:null,epcInfraChecking:false,
     // EPC CDPHE facilities
-    epcAutoFacilities:[],epcAutoNearestFacDist:null,epcAutoNearestFacName:null
+    epcAutoFacilities:[],epcAutoNearestFacDist:null,epcAutoNearestFacName:null,
+    // Manitou Springs GIS + Spatialest
+    manAutoZone:null,manAutoBuildingSqft:null,manAutoYearBuilt:null,
+    manAutoLotSize:null,manAutoBeds:null,manAutoParcelId:null,
+    manAutoAssessorLink:null,manAutoHazard:null,manAutoHistoric:null,
+    manAutoBuildingUse:null
   };
 }
 
@@ -100,6 +112,17 @@ function validateFormBeforeEngine(){
     if(!r.valid)errors.push(r.error);
     else f.epcSeparation=r.value;
   }
+  // Manitou Springs validations
+  if(f.manDwellingUnitSqft!==null){
+    const r=validateNumeric(f.manDwellingUnitSqft,"Dwelling unit sqft",100,100000);
+    if(!r.valid)errors.push(r.error);
+    else f.manDwellingUnitSqft=r.value;
+  }
+  if(f.manMonthsDiscontinued!==null){
+    const r=validateNumeric(f.manMonthsDiscontinued,"Months discontinued",0,999);
+    if(!r.valid)errors.push(r.error);
+    else f.manMonthsDiscontinued=r.value;
+  }
   return errors;
 }
 
@@ -107,16 +130,38 @@ function validateFormBeforeEngine(){
    SHAREABLE URL (F4)
    ═══════════════════════════════════════════════════════════════════ */
 function stateToHash(){
-  return"#"+btoa(JSON.stringify({j:ST.jurisdiction,f:ST.form}));
+  // Compact serialization: only include non-null, non-default form values
+  const defaults=createDefaultForm();
+  const f={};
+  for(const[k,v] of Object.entries(ST.form)){
+    if(v!==null&&v!==undefined&&v!==defaults[k]){
+      // Skip empty arrays
+      if(Array.isArray(v)&&v.length===0&&Array.isArray(defaults[k])&&defaults[k].length===0)continue;
+      f[k]=v;
+    }
+  }
+  return"#"+btoa(unescape(encodeURIComponent(JSON.stringify({j:ST.jurisdiction,f}))));
 }
 
 function hydrateFromHash(){
   if(!location.hash||location.hash.length<2)return false;
   try{
-    const payload=JSON.parse(atob(location.hash.slice(1)));
-    if(payload.j&&payload.f){
+    const payload=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(1)))));
+    if(payload.j&&payload.f&&typeof payload.f==="object"&&!Array.isArray(payload.f)){
+      const validJurs=["denver","cos","epc","manitou"];
+      if(!validJurs.includes(payload.j))return false;
+      // Only allow keys that exist in the default form (prevent prototype pollution)
+      const defaults=createDefaultForm();
+      const safeForm={};
+      for(const k of Object.keys(payload.f)){
+        if(k==="__proto__"||k==="constructor"||k==="prototype")continue;
+        if(!(k in defaults))continue;
+        const v=payload.f[k];
+        if(v!==null&&typeof v==="object"&&!Array.isArray(v))continue;
+        safeForm[k]=v;
+      }
       ST.jurisdiction=payload.j;
-      ST.form=Object.assign(createDefaultForm(),payload.f);
+      ST.form=Object.assign(createDefaultForm(),safeForm);
       return true;
     }
   }catch(e){console.warn("Invalid hash:",e)}
@@ -125,7 +170,14 @@ function hydrateFromHash(){
 
 function shareURL(){
   history.replaceState(null,"",stateToHash());
-  navigator.clipboard.writeText(location.href).then(()=>{
+  const url=location.href;
+  // Use Web Share API on mobile (handles long URLs properly in iOS share sheet)
+  if(navigator.share){
+    navigator.share({title:"Pathway Analysis — "+(ST.form.address||"Results"),url}).catch(()=>{});
+    return;
+  }
+  // Desktop fallback: clipboard copy
+  navigator.clipboard.writeText(url).then(()=>{
     const t=document.createElement("div");
     t.textContent="Link copied!";
     t.style.cssText="position:fixed;top:16px;right:16px;background:#1A3D28;color:#4ADE80;padding:8px 16px;border-radius:8px;font-size:13px;z-index:9999;";

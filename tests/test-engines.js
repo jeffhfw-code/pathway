@@ -39,7 +39,12 @@ function baseForm(overrides){
     fhaProtected:"yes",constructionType:"new",fbzPermits:null,pdzPermits:null,
     targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],
     distGLRDetox:99999,nearestAL:"no",
-    epcSexOffender:"no",epcNonprofit:"no",epcSeparation:null,epcCadO:"none"
+    epcSexOffender:"no",epcNonprofit:"no",epcSeparation:null,epcCadO:"none",
+    manOnSiteTreatment:"no",manPopulationType:"behavioral",manOvernightBeds:"yes",
+    manProvidesMedCare:"no",manProvidesPersonalCare:"no",manFullTimeNursing:"no",
+    manPreexistingUse:"no",manMonthsDiscontinued:null,manProposedExpansion:"no",
+    manNaturalHazard:"no",manHistoricDistrict:"no",manConstructionScope:"none",
+    manDwellingUnitSqft:null
   },overrides);
 }
 
@@ -352,14 +357,14 @@ test("AL exception bypasses separation",()=>{
 test("Hospice pathway appears only when targetTerminal set",()=>{
   const r1=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
   assert(!r1.results.some(p=>p.id==="HOSPICE"),"no hospice without terminal");
-  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetTerminal:true}));
+  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetTerminal:"yes"}));
   assert(r2.results.some(p=>p.id==="HOSPICE"),"hospice with terminal");
 });
 
 test("LTC pathway appears only when targetOver60 set",()=>{
   const r1=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
   assert(!r1.results.some(p=>p.id==="LTC"),"no LTC without over60");
-  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetOver60:true}));
+  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetOver60:"yes"}));
   assert(r2.results.some(p=>p.id==="LTC"),"LTC with over60");
 });
 
@@ -538,6 +543,329 @@ test("NC existing use has no fee",()=>{
 endSuite();
 
 /* ═══════════════════════════════════════════════════════════════════
+   MANITOU SPRINGS ENGINE TESTS
+   ═══════════════════════════════════════════════════════════════════ */
+suite("Manitou — Use Table Coverage");
+
+test("All MAN_ZL zones have MAN_UT entries",()=>{
+  const missing=MAN_ZL.filter(z=>!MAN_UT[z]);
+  assertEqual(missing.length,0,"Missing zones: "+missing.join(", "));
+});
+
+test("MAN_UT entries have required keys",()=>{
+  for(const z of MAN_ZL){
+    const u=MAN_UT[z];assert(u,"Missing MAN_UT for "+z);
+    for(const k of["ghSmall","ghLarge","ltc","ccrc","medOff","hcSup","medCare","boarding"]){
+      assert(k in u,"Missing "+k+" for "+z);
+    }
+  }
+});
+
+test("OS/P/PF zones are all N",()=>{
+  for(const z of["OS","P","PF"]){
+    const u=MAN_UT[z];
+    for(const k of Object.keys(u)){assertEqual(u[k],"N",z+" "+k)}
+  }
+});
+
+test("GH Small is P in all non-public zones",()=>{
+  for(const z of["GR","LDR","HDR","HLDR","DWTN","C","MUC"]){
+    assertEqual(MAN_UT[z].ghSmall,"P",z+" ghSmall");
+  }
+});
+
+test("C zone has broadest eligibility — all 8 use types P",()=>{
+  const u=MAN_UT["C"];
+  for(const k of Object.keys(u)){assertEqual(u[k],"P","C zone "+k)}
+});
+
+test("GH Large is C in GR/LDR/HLDR, P in HDR/DWTN/C/MUC",()=>{
+  assertEqual(MAN_UT["GR"].ghLarge,"C");
+  assertEqual(MAN_UT["LDR"].ghLarge,"C");
+  assertEqual(MAN_UT["HLDR"].ghLarge,"C");
+  assertEqual(MAN_UT["HDR"].ghLarge,"P");
+  assertEqual(MAN_UT["DWTN"].ghLarge,"P");
+  assertEqual(MAN_UT["C"].ghLarge,"P");
+  assertEqual(MAN_UT["MUC"].ghLarge,"P");
+});
+
+test("HC-SUP is P in C, C in MUC",()=>{
+  assertEqual(MAN_UT["C"].hcSup,"P");
+  assertEqual(MAN_UT["MUC"].hcSup,"C");
+});
+
+endSuite();
+
+suite("Manitou — Zone Helper Functions");
+
+test("manIsRes identifies residential zones",()=>{
+  assert(manIsRes("GR"));assert(manIsRes("HDR"));
+  assert(!manIsRes("DWTN"));assert(!manIsRes("OS"));
+});
+
+test("manIsComm identifies commercial zones",()=>{
+  assert(manIsComm("DWTN"));assert(manIsComm("C"));assert(manIsComm("MUC"));
+  assert(!manIsComm("GR"));assert(!manIsComm("PF"));
+});
+
+test("manIsPublic identifies public zones",()=>{
+  assert(manIsPublic("OS"));assert(manIsPublic("P"));assert(manIsPublic("PF"));
+  assert(!manIsPublic("GR"));assert(!manIsPublic("C"));
+});
+
+test("manTitle15Cap calculates correctly",()=>{
+  assertEqual(manTitle15Cap(null),null,"null sqft");
+  assertEqual(manTitle15Cap(50),1,"50 sf — minimum 1 for any positive sqft");
+  assertEqual(manTitle15Cap(100),1,"100 sf");
+  assertEqual(manTitle15Cap(250),2,"250 sf — boundary of tier 2");
+  assertEqual(manTitle15Cap(475),5,"475 sf — boundary of tier 5");
+  assertEqual(manTitle15Cap(535),6,"535 sf — boundary of tier 6");
+  assertEqual(manTitle15Cap(850),12,"850 sf cap");
+  // Above 850, formula caps at 850 input
+  assertEqual(manTitle15Cap(2000),12,"2000 sf still capped");
+});
+
+endSuite();
+
+suite("Manitou — GH Small Pathway");
+
+test("GH-SM permitted in GR zone",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR"}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  assert(ghSm,"GH-SM should exist");
+  assertEqual(ghSm.v,"yes");
+  assert(ghSm.proc.includes("Permitted"));
+});
+
+test("GH-SM blocked in OS zone (public zone error)",()=>{
+  const r=runManitouEngine(baseForm({zone:"OS"}));
+  assert(r.error,"should return error for public zone");
+});
+
+test("G-01: on_site_treatment=yes blocks GH-SM",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manOnSiteTreatment:"yes"}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  assertEqual(ghSm.v,"no","treatment blocks GH-SM");
+  assert(ghSm.stops.some(s=>s.msg.includes("medical or psychological treatment")));
+});
+
+test("G-01: on_site_treatment=unknown creates blocking caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manOnSiteTreatment:"unknown"}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  assertEqual(ghSm.v,"conditional");
+  assert(ghSm.cav.some(c=>c.msg.includes("Classification depends")&&c.blocking));
+});
+
+test("G-02: general population triggers blocking caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPopulationType:"general"}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  assert(ghSm.cav.some(c=>c.msg.includes("FHA-protected")&&c.blocking));
+});
+
+test("G-02: behavioral population passes FHA check",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPopulationType:"behavioral"}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  assert(ghSm.cav.some(c=>c.msg.includes("qualifies as FHA-protected")&&!c.blocking));
+});
+
+test("GH-SM Title 15 cap constrains max when sqft provided",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manDwellingUnitSqft:350}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  // 350 sf → Title 15 cap = 4 persons (325≤sf<400 bracket); GH-SM zoning max = 8; controlling = 4
+  assertEqual(ghSm.mg,4,"Controlling max should be Title 15 cap of 4");
+});
+
+endSuite();
+
+suite("Manitou — GH Large Pathway");
+
+test("GH-LG in HDR = Permitted",()=>{
+  const r=runManitouEngine(baseForm({zone:"HDR"}));
+  const ghLg=r.results.find(p=>p.id==="GH-LG");
+  assertEqual(ghLg.v,"yes");
+  assert(ghLg.proc.includes("Permitted"));
+});
+
+test("GH-LG in GR = CUP required",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR"}));
+  const ghLg=r.results.find(p=>p.id==="GH-LG");
+  assert(ghLg.proc.includes("CUP"));
+});
+
+test("G-12: natural hazard + CUP = blocked",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manNaturalHazard:"yes"}));
+  const ghLg=r.results.find(p=>p.id==="GH-LG");
+  assertEqual(ghLg.v,"no","hazard blocks CUP pathway");
+  assert(ghLg.stops.some(s=>s.msg.includes("natural hazards")));
+});
+
+test("G-12: natural hazard + Permitted = not blocked",()=>{
+  const r=runManitouEngine(baseForm({zone:"HDR",manNaturalHazard:"yes"}));
+  const ghLg=r.results.find(p=>p.id==="GH-LG");
+  // HDR is P, so hazard doesn't block (only blocks CUP)
+  assert(ghLg.v!=="no"||!ghLg.stops.some(s=>s.msg.includes("natural hazards")),"hazard should not block by-right pathway");
+});
+
+test("Medical care triggers classification ambiguity caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"HDR",manProvidesMedCare:"yes"}));
+  const ghLg=r.results.find(p=>p.id==="GH-LG");
+  assert(ghLg.cav.some(c=>c.msg.includes("boundary between Group Home Large and Medical Care")));
+});
+
+endSuite();
+
+suite("Manitou — Institutional Pathways");
+
+test("LTC permitted in HDR, blocked in GR",()=>{
+  const r1=runManitouEngine(baseForm({zone:"HDR",manFullTimeNursing:"yes"}));
+  const ltc1=r1.results.find(p=>p.id==="LTC");
+  assertEqual(ltc1.v,"yes");
+
+  const r2=runManitouEngine(baseForm({zone:"GR",manFullTimeNursing:"yes"}));
+  const ltc2=r2.results.find(p=>p.id==="LTC");
+  assertEqual(ltc2.v,"no");
+  assert(ltc2.stops.some(s=>s.msg.includes("Not permitted")));
+});
+
+test("CCRC permitted in C zone",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manPopulationType:"elderly"}));
+  const ccrc=r.results.find(p=>p.id==="CCRC");
+  assertEqual(ccrc.v,"yes");
+});
+
+test("MED-OFF: overnight blocks",()=>{
+  const r=runManitouEngine(baseForm({zone:"DWTN",manOvernightBeds:"yes"}));
+  const mo=r.results.find(p=>p.id==="MED-OFF");
+  assertEqual(mo.v,"no");
+  assert(mo.stops.some(s=>s.msg.includes("overnight")));
+});
+
+test("MED-OFF: outpatient viable in DWTN",()=>{
+  const r=runManitouEngine(baseForm({zone:"DWTN",manOvernightBeds:"no"}));
+  const mo=r.results.find(p=>p.id==="MED-OFF");
+  assertEqual(mo.v,"yes");
+});
+
+test("HC-SUP: CUP in MUC",()=>{
+  const r=runManitouEngine(baseForm({zone:"MUC"}));
+  const hc=r.results.find(p=>p.id==="HC-SUP");
+  assert(hc.proc.includes("CUP"),"HC-SUP should require CUP in MUC");
+});
+
+test("MED-CARE: P in C, C in MUC",()=>{
+  const r1=runManitouEngine(baseForm({zone:"C"}));
+  const mc1=r1.results.find(p=>p.id==="MED-CARE");
+  assert(mc1.proc.includes("Permitted"),"MED-CARE P in C");
+
+  const r2=runManitouEngine(baseForm({zone:"MUC"}));
+  const mc2=r2.results.find(p=>p.id==="MED-CARE");
+  assert(mc2.proc.includes("CUP"),"MED-CARE CUP in MUC");
+});
+
+endSuite();
+
+suite("Manitou — Boarding House");
+
+test("Boarding House: medical care blocks",()=>{
+  const r=runManitouEngine(baseForm({zone:"DWTN",manProvidesMedCare:"yes"}));
+  const bh=r.results.find(p=>p.id==="BOARD");
+  assertEqual(bh.v,"no");
+  assert(bh.stops.some(s=>s.msg.includes("medical or personal care")));
+});
+
+test("Boarding House: personal care blocks",()=>{
+  const r=runManitouEngine(baseForm({zone:"DWTN",manProvidesPersonalCare:"yes"}));
+  const bh=r.results.find(p=>p.id==="BOARD");
+  assertEqual(bh.v,"no");
+});
+
+test("Boarding House: CUP in GR",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manProvidesMedCare:"no",manProvidesPersonalCare:"no"}));
+  const bh=r.results.find(p=>p.id==="BOARD");
+  assert(bh.proc.includes("CUP"),"Boarding should require CUP in GR");
+});
+
+test("Boarding House: P in DWTN",()=>{
+  const r=runManitouEngine(baseForm({zone:"DWTN",manProvidesMedCare:"no",manProvidesPersonalCare:"no"}));
+  const bh=r.results.find(p=>p.id==="BOARD");
+  assert(bh.proc.includes("Permitted"),"Boarding P in DWTN");
+});
+
+test("Boarding House not permitted in LDR",()=>{
+  const r=runManitouEngine(baseForm({zone:"LDR"}));
+  const bh=r.results.find(p=>p.id==="BOARD");
+  assertEqual(bh.v,"no");
+  assert(bh.stops.some(s=>s.msg.includes("Not permitted")));
+});
+
+endSuite();
+
+suite("Manitou — Nonconforming Use");
+
+test("Preexisting + not discontinued = viable",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",maintained:"yes",manMonthsDiscontinued:0}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assert(nc.v==="yes"||nc.v==="conditional","NC should be viable");
+});
+
+test("G-03: discontinued > 12 months = blocked",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",manMonthsDiscontinued:15}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assertEqual(nc.v,"no");
+  assert(nc.stops.some(s=>s.msg.includes("discontinued")));
+});
+
+test("G-04: proposed expansion = blocked",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",manProposedExpansion:"yes",manMonthsDiscontinued:0}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assertEqual(nc.v,"no");
+  assert(nc.stops.some(s=>s.msg.includes("Enlargement")));
+});
+
+test("No preexisting use = blocked",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"no",existingRC:"no"}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assertEqual(nc.v,"no");
+});
+
+endSuite();
+
+suite("Manitou — Global Rules & Caveats");
+
+test("G-10: Commercial zone noise caveat in C zone",()=>{
+  const r=runManitouEngine(baseForm({zone:"C"}));
+  assert(r.gC.some(c=>c.msg.includes("noise")),"should have noise caveat");
+});
+
+test("G-11: MUC zone URA routing caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"MUC"}));
+  assert(r.gC.some(c=>c.msg.includes("Urban Renewal")),"should have URA caveat");
+});
+
+test("Historic district caveat when historic=yes",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manHistoricDistrict:"yes"}));
+  assert(r.gC.some(c=>c.msg.includes("Historic District")),"should have historic caveat");
+});
+
+test("FHA reasonable accommodation caveat always present",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR"}));
+  assert(r.gC.some(c=>c.msg.includes("reasonable accommodation")),"should have FHA caveat");
+});
+
+test("C zone produces all 9 pathways",()=>{
+  const r=runManitouEngine(baseForm({zone:"C"}));
+  assertEqual(r.results.length,9,"should have 9 pathways in C zone");
+});
+
+test("Engine returns p2=pass with no global stops",()=>{
+  const r=runManitouEngine(baseForm({zone:"C"}));
+  assertEqual(r.p2,"pass");
+  assertEqual(r.gS.length,0,"no global hard stops");
+});
+
+endSuite();
+
+/* ═══════════════════════════════════════════════════════════════════
    STATE & VALIDATION TESTS
    ═══════════════════════════════════════════════════════════════════ */
 suite("State Management");
@@ -635,6 +963,421 @@ test("validateFormBeforeEngine catches bad lot size",()=>{
   assert(errors.length>0,"should have errors");
   assert(errors[0].includes("Lot size"));
   ST.form.lotSize=null; // cleanup
+});
+
+endSuite();
+
+/* ═══════════════════════════════════════════════════════════════════
+   C11 CRITICAL — Previously missing test coverage
+   ═══════════════════════════════════════════════════════════════════ */
+suite("COS Engine — Detox / Shelter / FBZ / PDZ");
+
+test("Detox blocked by separation when within 1000 ft",()=>{
+  const r=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes",distGLRDetox:500}));
+  const detox=r.results.find(p=>p.id==="DETOX");
+  assert(detox,"DETOX should exist");
+  assertEqual(detox.v,"no","DETOX blocked by separation");
+  assert(detox.stops.some(s=>s.msg.includes("1,000 ft")),"stop should mention 1,000 ft");
+});
+
+test("Detox viable when beyond 1000 ft",()=>{
+  const r=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes",distGLRDetox:2000}));
+  const detox=r.results.find(p=>p.id==="DETOX");
+  assert(detox,"DETOX should exist");
+  assert(detox.v!=="no"||!detox.stops.some(s=>s.msg.includes("1,000 ft")),"DETOX should not be blocked by separation");
+});
+
+test("Shelter appears only when tempShelter set",()=>{
+  const r1=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes"}));
+  assert(!r1.results.some(p=>p.id==="SHELTER"),"no shelter without tempShelter");
+  const r2=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes",tempShelter:"yes"}));
+  assert(r2.results.some(p=>p.id==="SHELTER"),"shelter with tempShelter=yes");
+});
+
+test("FBZ zone does not crash — returns pathways",()=>{
+  const r=runCOSEngine(baseForm({zone:"FBZ",fhaProtected:"yes",fbzPermits:"unknown"}));
+  assertEqual(r.p2,"pass","FBZ should not error");
+  assert(r.results.length>0,"should have pathways");
+});
+
+test("FBZ with permits=no blocks pathways",()=>{
+  const r=runCOSEngine(baseForm({zone:"FBZ",fhaProtected:"yes",fbzPermits:"no"}));
+  const hseS=r.results.find(p=>p.id==="HSE-S");
+  assertEqual(hseS.v,"no","HSE-S blocked by FBZ permits=no");
+});
+
+test("PDZ zone does not crash — returns pathways",()=>{
+  const r=runCOSEngine(baseForm({zone:"PDZ",fhaProtected:"yes",pdzPermits:"unknown"}));
+  assertEqual(r.p2,"pass","PDZ should not error");
+  assert(r.results.length>0,"should have pathways");
+});
+
+test("PDZ HSE Small always permitted",()=>{
+  const r=runCOSEngine(baseForm({zone:"PDZ",fhaProtected:"yes",pdzPermits:"no"}));
+  const hseS=r.results.find(p=>p.id==="HSE-S");
+  assert(hseS,"HSE-S should exist in PDZ");
+  assertEqual(hseS.v,"yes","HSE-S always permitted in PDZ residential");
+});
+
+endSuite();
+
+suite("EPC Engine — Separation & CAD-O");
+
+test("EPC separation null produces blocking caveat",()=>{
+  const r=runEPCEngine(baseForm({zone:"RR-5",epcSeparation:null}));
+  const ghS=r.results.find(p=>p.id==="GH-DIS-S");
+  if(ghS&&ghS.v!=="no"){
+    // Should have blocking caveat about unknown separation
+    const hasSepCav=ghS.cav.some(c=>c.msg.toLowerCase().includes("separation"));
+    assert(hasSepCav,"should have separation caveat when null");
+  }
+});
+
+test("EPC CAD-O overlay produces caveat on institutional pathway",()=>{
+  const r=runEPCEngine(baseForm({zone:"CC",epcCadO:"cado",overnight:"yes"}));
+  const hosp=r.results.find(p=>p.id==="HOSP");
+  assert(hosp,"HOSP pathway should exist in CC zone");
+  const hasCadCav=hosp.cav.some(c=>c.msg.toLowerCase().includes("cad"));
+  assert(hasCadCav,"should have CAD-O caveat on hospital pathway");
+});
+
+endSuite();
+
+suite("Manitou — Construction Scope Branches");
+
+test("Minor construction scope changes risk and workflow",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manConstructionScope:"minor"}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  assert(ghSm,"GH-SM should exist");
+  assertEqual(ghSm.rank,"Good","minor scope should rank Good");
+  assert(ghSm.rsk.fee.includes("600"),"minor fee should reference $600");
+});
+
+test("Major construction scope changes risk and workflow",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manConstructionScope:"major"}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  assert(ghSm,"GH-SM should exist");
+  assertEqual(ghSm.rank,"Moderate","major scope should rank Moderate");
+  assert(ghSm.rsk.fee.includes("1,200"),"major fee should reference $1,200");
+});
+
+test("Title 15 cap returns null for zero sqft",()=>{
+  assertEqual(manTitle15Cap(0),null,"0 sqft should return null");
+  assertEqual(manTitle15Cap(-100),null,"negative sqft should return null");
+  assertEqual(manTitle15Cap(null),null,"null should return null");
+});
+
+endSuite();
+
+/* ═══════════════════════════════════════════════════════════════════
+   W27-W29: MISSING TEST BRANCHES
+   ═══════════════════════════════════════════════════════════════════ */
+suite("Denver Engine — Spacing Edge Cases");
+
+test("M-GMX zone gets 600 ft MX spacing for Type 3",()=>{
+  const sp=getSp("M-GMX");
+  assertEqual(sp.d,600,"M-GMX spacing should be 600 ft");
+  const r=runEngine(baseForm({zone:"M-GMX",distType34:400}));
+  const p3=r.results.find(p=>p.id==="P3");
+  assertEqual(p3.v,"no","T3 blocked by spacing at 400 ft");
+  assert(p3.stops[0].msg.includes("Spacing"));
+});
+
+test("Passing spacing: distance exceeds MU threshold",()=>{
+  const r=runEngine(baseForm({zone:"S-MU-3",distType34:1500}));
+  const p3=r.results.find(p=>p.id==="P3");
+  assert(p3.v!=="no"||!p3.stops.some(s=>s.msg.includes("Spacing")),"T3 should pass spacing at 1500 ft > 1200 ft min");
+  const p4=r.results.find(p=>p.id==="P4");
+  assert(p4.v!=="no"||!p4.stops.some(s=>s.msg.includes("Spacing")),"T4 should pass spacing at 1500 ft");
+});
+
+test("D-TD downtown zone has no spacing requirement",()=>{
+  const r=runEngine(baseForm({zone:"D-TD",distType34:50}));
+  const p3=r.results.find(p=>p.id==="P3");
+  assert(p3.v!=="no"||!p3.stops.some(s=>s.msg.includes("Spacing")),"D-TD should not block on spacing");
+  assert(p3.rat.includes("No spacing"),"rationale should mention no spacing");
+});
+
+test("D-CPV-T downtown zone has no spacing requirement",()=>{
+  const r=runEngine(baseForm({zone:"D-CPV-T",distType34:50}));
+  const p3=r.results.find(p=>p.id==="P3");
+  assert(p3.v!=="no"||!p3.stops.some(s=>s.msg.includes("Spacing")),"D-CPV-T should not block on spacing");
+});
+
+test("M-IMX-5 zone gets 600 ft spacing",()=>{
+  const sp=getSp("M-IMX-5");
+  assertEqual(sp.d,600,"M-IMX-5 spacing");
+});
+
+endSuite();
+
+suite("COS Engine — NNA-O Zone Edge Cases");
+
+test("NNA-O South: GLR-S and HSE-S are Permitted",()=>{
+  const r=runCOSEngine(baseForm({zone:"NNA-O South",fhaProtected:"yes"}));
+  const hseS=r.results.find(p=>p.id==="HSE-S");
+  assert(hseS,"HSE-S should exist");
+  assertEqual(hseS.v,"yes","HSE-S permitted in NNA-O South");
+  const glrS=r.results.find(p=>p.id==="GLR-S");
+  assert(!glrS,"GLR-S should not appear when FHA=yes");
+});
+
+test("NNA-O South: Detox is N",()=>{
+  const r=runCOSEngine(baseForm({zone:"NNA-O South",fhaProtected:"yes"}));
+  const detox=r.results.find(p=>p.id==="DETOX");
+  assertEqual(detox.v,"no","DETOX should be N in NNA-O South");
+  assert(detox.stops.some(s=>s.msg.includes("Not permitted")));
+});
+
+test("NNA-O Central: HSE-S is Conditional",()=>{
+  const r=runCOSEngine(baseForm({zone:"NNA-O Central",fhaProtected:"yes"}));
+  const hseS=r.results.find(p=>p.id==="HSE-S");
+  assert(hseS,"HSE-S should exist");
+  assert(hseS.proc.includes("Admin"),"HSE-S should be Admin in NNA-O Central (perm C maps to CUP for large but Admin for HSE-S)");
+});
+
+test("NNA-O North: GCL is Conditional (not N like Central)",()=>{
+  const r=runCOSEngine(baseForm({zone:"NNA-O North",fhaProtected:"yes"}));
+  // gcl key: NNA-O North = C, NNA-O Central = N
+  // GCL isn't a standard pathway ID — check if engine uses it. It may not exist as a pathway.
+  // Actually COS engine doesn't have a GCL pathway — check the use table key instead
+  assertEqual(COS_UT["NNA-O North"].gcl,"C","NNA-O North gcl should be C");
+  assertEqual(COS_UT["NNA-O Central"].gcl,"N","NNA-O Central gcl should be N");
+});
+
+test("FBZ with permits=yes produces viable pathways",()=>{
+  const r=runCOSEngine(baseForm({zone:"FBZ",fhaProtected:"yes",fbzPermits:"yes"}));
+  const hseS=r.results.find(p=>p.id==="HSE-S");
+  assert(hseS,"HSE-S should exist");
+  assertEqual(hseS.v,"yes","HSE-S viable when FBZ permits=yes");
+});
+
+test("PDZ with permits=yes produces viable HSE-M",()=>{
+  const r=runCOSEngine(baseForm({zone:"PDZ",fhaProtected:"yes",pdzPermits:"yes"}));
+  const hseM=r.results.find(p=>p.id==="HSE-M");
+  assert(hseM,"HSE-M should exist");
+  assert(hseM.v!=="no"||!hseM.stops.some(s=>s.msg.includes("PDZ")),"HSE-M should be viable with PDZ permits=yes");
+});
+
+endSuite();
+
+suite("EPC Engine — Non-24hr and Separation Branches");
+
+test("Non-24hr + separation < 500 ft blocks non-disabled GH",()=>{
+  const r=runEPCEngine(baseForm({zone:"RS-20000",op24hr:"no",epcSeparation:300}));
+  const ghAge=r.results.find(p=>p.id==="GH-AGE-S");
+  assertEqual(ghAge.v,"no","GH-AGE-S blocked by separation under code text");
+  assert(ghAge.stops.some(s=>s.msg.includes("Separation")&&s.msg.includes("500")));
+});
+
+test("Non-24hr + separation < 500 ft does NOT block disabled GH",()=>{
+  const r=runEPCEngine(baseForm({zone:"RS-20000",op24hr:"no",epcSeparation:300}));
+  const ghDis=r.results.find(p=>p.id==="GH-DIS-S");
+  assert(!ghDis.stops.some(s=>s.msg.includes("Separation")),"GH-DIS-S exempt from separation");
+});
+
+test("Non-24hr small disabled gets code-text Allowed",()=>{
+  const r=runEPCEngine(baseForm({zone:"RS-20000",op24hr:"no",epcSeparation:600}));
+  const ghDis=r.results.find(p=>p.id==="GH-DIS-S");
+  assert(ghDis.proc.includes("Allowed"),"GH-DIS-S should be Allowed under code text");
+  assertEqual(ghDis.mg,8,"code-text small cap is 8");
+});
+
+test("Non-24hr large disabled gets Special Use",()=>{
+  const r=runEPCEngine(baseForm({zone:"RS-20000",op24hr:"no",epcSeparation:600}));
+  const ghDisL=r.results.find(p=>p.id==="GH-DIS-L");
+  assert(ghDisL.proc.includes("Special Use"),"GH-DIS-L should be Special Use under code text");
+});
+
+test("Non-24hr + commercial zone: separation not enforced",()=>{
+  const r=runEPCEngine(baseForm({zone:"CC",op24hr:"no",epcSeparation:200}));
+  const ghAge=r.results.find(p=>p.id==="GH-AGE-S");
+  // CC is not GH-eligible, so GH should be blocked by zone, not separation
+  assertEqual(ghAge.v,"no","GH not permitted in CC");
+});
+
+endSuite();
+
+suite("Manitou — Institutional Edge Cases");
+
+test("CCRC with non-elderly population has blocking caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manPopulationType:"behavioral"}));
+  const ccrc=r.results.find(p=>p.id==="CCRC");
+  assert(ccrc,"CCRC should exist");
+  assert(ccrc.cav.some(c=>c.msg.includes("age-restricted")&&c.blocking),"should have age-restricted blocking caveat");
+});
+
+test("CCRC with elderly population has no age-restriction caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manPopulationType:"elderly"}));
+  const ccrc=r.results.find(p=>p.id==="CCRC");
+  assert(!ccrc.cav.some(c=>c.msg.includes("age-restricted")&&c.blocking),"no age-restriction blocking caveat for elderly");
+});
+
+test("HC-SUP always has interpretive blocking caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"C"}));
+  const hc=r.results.find(p=>p.id==="HC-SUP");
+  assert(hc,"HC-SUP should exist");
+  assert(hc.cav.some(c=>c.msg.includes("Planning Director")&&c.blocking),"should have interpretive blocking caveat");
+  assertEqual(hc.rank,"Moderate (interpretive)","rank should reflect interpretive risk");
+});
+
+test("HC-SUP in C zone is Permitted",()=>{
+  const r=runManitouEngine(baseForm({zone:"C"}));
+  const hc=r.results.find(p=>p.id==="HC-SUP");
+  assert(hc.proc.includes("Permitted"),"HC-SUP should be Permitted in C zone");
+});
+
+test("MED-CARE with all services=no has blocking caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manProvidesMedCare:"no",manProvidesPersonalCare:"no",manFullTimeNursing:"no"}));
+  const mc=r.results.find(p=>p.id==="MED-CARE");
+  assert(mc,"MED-CARE should exist");
+  assert(mc.cav.some(c=>c.msg.includes("medical, surgical, or nursing")&&c.blocking),"should have medical services blocking caveat");
+});
+
+test("MED-CARE with medCare=yes has no medical services caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manProvidesMedCare:"yes"}));
+  const mc=r.results.find(p=>p.id==="MED-CARE");
+  assert(!mc.cav.some(c=>c.msg.includes("medical, surgical, or nursing")&&c.blocking),"no medical services blocking caveat when medCare=yes");
+});
+
+endSuite();
+
+/* ── DZC Research Verification: W1 — O-1 spacing/density ──────── */
+suite("Denver O-1 zone — spacing and density (W1)");
+
+test("O-1 Type 1: no spacing, no density check — viable",()=>{
+  const r=runEngine(baseForm({zone:"O-1",rcWithin1mi:5}));
+  const p=r.results.find(x=>x.id==="P1");
+  assert(p.v==="yes","Type 1 should be viable in O-1 even with 5 RC within 1mi");
+  assert(!p.stops.length,"no stops");
+});
+
+test("O-1 Type 2: no spacing, no density — viable",()=>{
+  const r=runEngine(baseForm({zone:"O-1"}));
+  const p=r.results.find(x=>x.id==="P2");
+  assert(p.v==="yes","Type 2 viable in O-1");
+  assert(!p.cav.some(c=>c.msg.includes("prior use")),"no prior-use caveat in O-1 (not SU/TU/RH)");
+});
+
+test("O-1 Type 3: no spacing — viable even when near Type 3/4",()=>{
+  const r=runEngine(baseForm({zone:"O-1",distType34:50}));
+  const p=r.results.find(x=>x.id==="P3");
+  assert(p.v!=="no","Type 3 should not be stopped by spacing in O-1");
+  assert(!p.stops.some(s=>s.msg.includes("Spacing")),"no spacing stop");
+});
+
+test("O-1 Type 4: no spacing but density cap applies (§ 11.2.12.1.B)",()=>{
+  const r=runEngine(baseForm({zone:"O-1",rcType34within1mi:4,distType34:50}));
+  const p=r.results.find(x=>x.id==="P4");
+  assert(p.v==="no","Type 4 stopped by density in O-1");
+  assert(p.stops.some(s=>s.msg.includes("Density")),"density stop present");
+});
+
+test("O-1 Type 4: density ok — viable",()=>{
+  const r=runEngine(baseForm({zone:"O-1",rcType34within1mi:2,distType34:50}));
+  const p=r.results.find(x=>x.id==="P4");
+  assert(p.v!=="no","Type 4 viable when density ok in O-1");
+});
+
+endSuite();
+
+/* ── DZC Research Verification: T4-05 — Type 2 lot/prior-use ─── */
+suite("Denver Type 2 — lot size and prior-use scope (T4-05)");
+
+test("Type 2 in TU zone: 12,000 sf lot size check applies",()=>{
+  const r=runEngine(baseForm({zone:"E-TU-C",lotSize:8000}));
+  const p=r.results.find(x=>x.id==="P2");
+  assert(p.v==="no","Type 2 stopped by lot size in TU");
+  assert(p.stops.some(s=>s.msg.includes("12,000")),"lot size stop message");
+});
+
+test("Type 2 in RH-2.5 zone: lot size check applies",()=>{
+  const r=runEngine(baseForm({zone:"E-RH-2.5",lotSize:10000}));
+  const p=r.results.find(x=>x.id==="P2");
+  assert(p.v==="no","Type 2 stopped by lot size in RH-2.5");
+});
+
+test("Type 2 in RH-3 zone: lot size check applies",()=>{
+  const r=runEngine(baseForm({zone:"G-RH-3",lotSize:5000}));
+  const p=r.results.find(x=>x.id==="P2");
+  assert(p.v==="no","Type 2 stopped by lot size in RH-3");
+});
+
+test("Type 2 in SU/TU/RH: prior-use caveat present",()=>{
+  const r=runEngine(baseForm({zone:"E-SU-D",lotSize:15000}));
+  const p=r.results.find(x=>x.id==="P2");
+  assert(p.cav.some(c=>c.msg.includes("Prior use")),"prior-use caveat in SU");
+});
+
+test("Type 2 in non-SU/TU/RH zone: no prior-use caveat",()=>{
+  const r=runEngine(baseForm({zone:"E-MU-2.5"}));
+  const p=r.results.find(x=>x.id==="P2");
+  assert(!p.cav.some(c=>c.msg.includes("Prior use")),"no prior-use caveat in MU");
+});
+
+test("Type 2 has no density cap in any zone",()=>{
+  const r=runEngine(baseForm({zone:"E-SU-D",lotSize:15000,rcWithin1mi:10}));
+  const p=r.results.find(x=>x.id==="P2");
+  assert(!p.stops.some(s=>s.msg.includes("Density")),"no density stop for Type 2");
+});
+
+endSuite();
+
+/* ── DZC Research Verification: T4-25 — correctional flag + D-CPV ── */
+suite("Denver correctional supervision + D-CPV spacing (T4-25)");
+
+test("No standalone Community Corrections pathway — only P1-P5",()=>{
+  const r=runEngine(baseForm({zone:"D-CPV-T"}));
+  const ids=r.results.map(p=>p.id);
+  assert(ids.length===5,"exactly 5 pathways");
+  assert(JSON.stringify(ids.sort())===JSON.stringify(["P1","P2","P3","P4","P5"]),"IDs are P1-P5");
+});
+
+test("Correctional flag in SU: Types 1 and 2 stopped",()=>{
+  const r=runEngine(baseForm({zone:"E-SU-D",correctional:"yes",lotSize:15000}));
+  const p1=r.results.find(x=>x.id==="P1");
+  const p2=r.results.find(x=>x.id==="P2");
+  assert(p1.v==="no","Type 1 stopped");
+  assert(p1.stops.some(s=>s.msg.includes("Correctional prohibited")),"correctional prohibition stop on Type 1");
+  assert(p2.v==="no","Type 2 stopped");
+  assert(p2.stops.some(s=>s.msg.includes("Correctional prohibited")),"correctional prohibition stop on Type 2");
+});
+
+test("Correctional flag in RH-3: Type 2 gets ZPCIM upgrade",()=>{
+  const r=runEngine(baseForm({zone:"G-RH-3",correctional:"yes",lotSize:15000}));
+  const p2=r.results.find(x=>x.id==="P2");
+  assert(p2.cav.some(c=>c.msg.includes("ZPCIM")),"ZPCIM caveat on Type 2 in RH-3 with correctional");
+  assert(p2.proc==="L-ZPCIM","proc upgraded to L-ZPCIM");
+});
+
+test("Correctional flag: DPS referral caveat on all pathways",()=>{
+  const r=runEngine(baseForm({zone:"E-MU-2.5",correctional:"yes"}));
+  assert(r.gC.some(c=>c.msg.includes("DPS referral")),"global DPS referral caveat");
+});
+
+test("D-CPV-T: no spacing for Type 3 — viable at 50ft",()=>{
+  const r=runEngine(baseForm({zone:"D-CPV-T",distType34:50}));
+  const p3=r.results.find(x=>x.id==="P3");
+  assert(p3.v!=="no","Type 3 viable in D-CPV-T");
+  assert(!p3.stops.some(s=>s.msg.includes("Spacing")),"no spacing stop");
+});
+
+test("D-CPV-C: no spacing for Type 4 — viable at 50ft",()=>{
+  const r=runEngine(baseForm({zone:"D-CPV-C",distType34:50,rcType34within1mi:2}));
+  const p4=r.results.find(x=>x.id==="P4");
+  assert(p4.v!=="no","Type 4 viable in D-CPV-C at 50ft (no spacing rule)");
+});
+
+test("Type 3 has no density cap — high rc34 count does not stop it",()=>{
+  const r=runEngine(baseForm({zone:"E-MU-2.5",rcType34within1mi:10,distType34:2000}));
+  const p3=r.results.find(x=>x.id==="P3");
+  assert(!p3.stops.some(s=>s.msg.includes("Density")),"no density stop for Type 3");
+});
+
+test("getSp returns null for O-1, D-CPV-T, I-A",()=>{
+  assert(getSp("O-1")===null,"O-1 no spacing");
+  assert(getSp("D-CPV-T")===null,"D-CPV-T no spacing");
+  assert(getSp("I-A")===null,"I-A no spacing");
 });
 
 endSuite();

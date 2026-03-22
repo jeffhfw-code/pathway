@@ -117,6 +117,7 @@ function getSp(z){
 const COS_ZL=["A","R-E","R-1 9","R-1 6","R-2","R-4","R-5","R-Flex Low","R-Flex Med","R-Flex High","OR","MX-N","MX-T","MX-M","MX-L","MX-I","FBZ","BP","LI","GI","APD","PF","PK","PDZ","NNA-O South","NNA-O Central","NNA-O North"];
 const COS_ZG={"Residential":{list:["A","R-E","R-1 9","R-1 6","R-2","R-4","R-5","R-Flex Low","R-Flex Med","R-Flex High"]},"Office/Mixed-Use":{list:["OR","MX-N","MX-T","MX-M","MX-L","MX-I"]},"Form-Based/Planned":{list:["FBZ","PDZ"]},"Employment/Industrial":{list:["BP","LI","GI"]},"Special Purpose":{list:["APD","PF","PK"]},"NNA Overlay":{list:["NNA-O South","NNA-O Central","NNA-O North"]}};
 const COS_UT={};
+// gcl = Group Care Living — populated per Table 7.3.2-A but no engine pathway yet (reserved)
 function cZ(zones,glrS,glrM,glrL,hseS,hseM,hseL,gcl,ltc,detox,hospice,shelter){
   zones.forEach(z=>{COS_UT[z]={glrS,glrM,glrL,hseS,hseM,hseL,gcl,ltc,detox,hospice,shelter}});
 }
@@ -145,15 +146,9 @@ cZ(["PK"],     "N","N","N","N","N","N","N","N","N","N","N");
 cZ(["NNA-O South"],  "P","P","P","P","P","P","C","P","N","P","P");
 cZ(["NNA-O Central"],"C","C","C","C","C","C","N","C","N","C","C");
 cZ(["NNA-O North"],  "C","C","C","C","C","C","C","C","N","C","C");
-
-function cosOverlayMod(overlays,useKey){
-  if(!overlays||!overlays.length)return null;
-  if(overlays.includes("AP-O: ADNL"))return"C";
-  if(overlays.some(o=>o.includes("RPZ")))return null;
-  if(overlays.some(o=>o.includes("APZ-1")||o.includes("APZ-2")||o.includes("ANAV")))return"P";
-  if(overlays.includes("SS-O"))return null;
-  return null;
-}
+// FBZ/PDZ: plan-based zones — conservative "C" baseline; engine gate logic (lines 38-46) overrides per plan status
+cZ(["FBZ"],    "C","C","C","C","C","C","C","C","C","C","C");
+cZ(["PDZ"],    "C","C","C","C","C","C","C","C","C","C","C");
 
 /* ═══════════════════════════════════════════════════════════════════
    EL PASO COUNTY — Zone List + Use Table (LDC Table 5-1)
@@ -201,29 +196,57 @@ const EPC_GH_ZONES=new Set(["F-5","A-35","A-5","RR-5","RR-2.5","RR-0.5","RS-2000
 function epcIsGHZone(z){return EPC_GH_ZONES.has(z)}
 function epcIsCommercial(z){return["CC","CR","CS","C-1","C-2","M"].includes(z)}
 
-/* ── EPC Water/Sewer Infrastructure District Mapping ──────────── */
-const EPC_INFRA_DISTRICTS={
-  WOODMOOR:     "Woodmoor Water & Sanitation District No. 1",
-  "VILLAGE CENTER @ WOODMOOR": "Woodmoor Water & Sanitation District No. 1",
-  "MISTY ACRES": "Woodmoor Water & Sanitation District No. 1",
-  "HIGBY":       "Woodmoor Water & Sanitation District No. 1",
-  "LAKE OF THE ROCKIES": "Woodmoor Water & Sanitation District No. 1",
-  TRIVIEW:      "Triview Metropolitan District",
-  "JACKSON CREEK": "Triview Metropolitan District",
-  "REGENCY":    "Triview Metropolitan District",
-  "SANCTUARY POINTE": "Triview Metropolitan District",
-  "KING'S DEER": "Triview Metropolitan District",
-  "SECURITY":   "Security-Widefield Water & Sanitation District",
-  "WIDEFIELD":  "Security-Widefield Water & Sanitation District",
-  "FOUNTAINVIEW": "Security-Widefield Water & Sanitation District",
-  "LORSON RANCH": "Security-Widefield Water & Sanitation District",
-  GLENEAGLE:    "Donala Water & Sanitation District",
-  DONALA:       "Donala Water & Sanitation District",
-  "STRUTHERS":  "Donala Water & Sanitation District",
-  CHEROKEE:     "Cherokee Metropolitan District",
-  "MONUMENT LAKE": "Monument Sanitation District",
-  "WOODMEN HILLS": "Woodmen Hills Metropolitan District",
+/* ── Spatialest Property Record API (El Paso County) ──────────── */
+const SPATIALEST_API="https://property.spatialest.com/co/elpaso/api/v1/recordcard";
+
+/* ── FEMA National Flood Hazard Layer ──────────────────────────── */
+const FEMA_NFHL="https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28/query";
+
+/* ── NPS National Register Historic Districts ──────────────────── */
+const NPS_HISTORIC="https://services1.arcgis.com/4yjifSiIG17F0gW5/arcgis/rest/services/National_Register_of_Historic_Places_Historic_Districts/FeatureServer/0/query";
+
+/* ═══════════════════════════════════════════════════════════════════
+   MANITOU SPRINGS — Zone List + Use Table (LUDC Table 18.04.2.5-1)
+   ═══════════════════════════════════════════════════════════════════ */
+const MAN_GEOCODE=EPC_GEOCODE; // reuse world geocoder
+const MAN_BBOX="-104.940,38.830,-104.890,38.870";
+const MAN_ZMAP="https://comsgov.maps.arcgis.com/apps/instant/interactivelegend/index.html?appid=a352048fe74549378e417e5b0aa3f733";
+
+const MAN_ZL=["GR","LDR","HDR","HLDR","DWTN","C","MUC","OS","P","PF"];
+const MAN_ZG={
+  "Residential":{list:["GR","LDR","HDR","HLDR"]},
+  "Commercial / Mixed-Use":{list:["DWTN","C","MUC"]},
+  "Public / Open Space":{list:["OS","P","PF"]}
 };
+const MAN_UT={};
+function mZ(zones,ghSmall,ghLarge,ltc,ccrc,medOff,hcSup,medCare,boarding){
+  zones.forEach(z=>{MAN_UT[z]={ghSmall,ghLarge,ltc,ccrc,medOff,hcSup,medCare,boarding}});
+}
+mZ(["GR"],          "P","C","N","N","N","N","N","C");
+mZ(["LDR"],         "P","C","N","N","N","N","N","N");
+mZ(["HDR"],         "P","P","P","P","N","N","N","N");
+mZ(["HLDR"],        "P","C","N","N","N","N","N","N");
+mZ(["DWTN"],        "P","P","N","N","P","N","N","P");
+mZ(["C"],           "P","P","P","P","P","P","P","P");
+mZ(["MUC"],         "P","P","P","P","P","C","C","P");
+mZ(["OS","P","PF"], "N","N","N","N","N","N","N","N");
+
+/* ── Manitou Springs Zone Helper Functions ──────────────────── */
+const MAN_RES=new Set(["GR","LDR","HDR","HLDR"]);
+const MAN_COMM=new Set(["DWTN","C","MUC"]);
+function manIsRes(z){return MAN_RES.has(z)}
+function manIsComm(z){return MAN_COMM.has(z)}
+function manIsPublic(z){return z==="OS"||z==="P"||z==="PF"}
+
+/* ── Manitou Springs Title 15 Occupancy Cap Calculator ──────── */
+// Title 15 § 15.08.120 graduated table: [minSqft, maxOccupants]
+const TITLE_15_TABLE=[[175,1],[250,2],[325,3],[400,4],[475,5],[535,6]];
+function manTitle15Cap(sqft){
+  if(sqft===null||sqft===undefined||sqft<=0)return null;
+  for(const[threshold,cap] of TITLE_15_TABLE){if(sqft<=threshold)return cap}
+  // Above 535 sf: 6 + floor((sqft - 475) / 60), capped at 850 sf per § 15.08.120
+  return 6+Math.floor((Math.min(sqft,850)-475)/60);
+}
 
 /* ── GIS Phase Valid Transitions (state machine) ──────────────── */
 /* ── Form Defaults (skip wizard pages for always-same answers) ── */
@@ -240,7 +263,8 @@ const FORM_DEFAULTS={
 const ENGINE_VERIFIED={
   denver:"2026-03-20",
   cos:"2026-03-20",
-  epc:"2026-03-20"
+  epc:"2026-03-20",
+  manitou:"2026-03-20"
 };
 
 /* ── Zone Code Citation URLs (F10) ─────────────────────────────── */
@@ -263,6 +287,11 @@ function citeURL(cite,jur){
   if(jur==="epc"){
     const m=cite.match(/§\s*([\d]+\.[\d]+)/);
     if(m)return"https://library.municode.com/co/el_paso_county/codes/land_development_code";
+  }
+  // Manitou Springs LUDC
+  if(jur==="manitou"){
+    if(cite.match(/§\s*1[58]\./))return"https://library.municode.com/co/manitou_springs/codes/code_of_ordinances";
+    if(cite.match(/Title\s*15/))return"https://library.municode.com/co/manitou_springs/codes/code_of_ordinances";
   }
   // Colorado Revised Statutes
   const crs=cite.match(/C\.R\.S\.\s*§\s*([\d]+-[\d]+-[\d]+)/);

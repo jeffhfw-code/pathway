@@ -139,9 +139,9 @@ function runEPCEngine(f){
       }
       // Separation test (code text) for non-disabled
       if(subtype!=="disabled"&&!isComm){
-        if(sep!==null&&sep<500){
+        if(sep!=null&&sep<500){
           pw.stops.push({msg:"Separation: "+sep+" ft along same road < 500 ft minimum (code text applies — non-24-hour)",cite:"§ 5.2.17(A)"});
-        } else if(sep===null){
+        } else if(sep==null){
           pw.cav.push({msg:"Separation distance unknown — 500 ft along same road required under code text",cite:"§ 5.2.17(A)",blocking:true,resolve:"Measure from lot boundary along road to nearest GH/childcare/family care."});
         }
       }
@@ -189,7 +189,7 @@ function runEPCEngine(f){
 
   // ──── REHABILITATION FACILITY ─────────────────────────────────
   tP("REHAB","Rehabilitation Facility","Institutional SUD/alcohol treatment (no LDC bed cap)","rehab",999,(pw,perm)=>{
-    if(cadOBlock(pw,"hosp"))return; // institutional use
+    cadOBlock(pw,"hosp");
     const isA=perm==="A";
     pw.proc=isA?"Allowed — SDP review":"Special Use (§ 5.3.2)";
     pw.rat="Rehabilitation Facility in "+z+". Institutional (not a group home). "+
@@ -202,7 +202,7 @@ function runEPCEngine(f){
 
   // ──── HOSPITAL ────────────────────────────────────────────────
   tP("HOSP","Hospital","Inpatient medical/surgical (incl. psych, medical detox)","hosp",999,(pw,perm)=>{
-    if(cadOBlock(pw,"hosp"))return;
+    cadOBlock(pw,"hosp");
     const isA=perm==="A";
     pw.proc=isA?"Allowed — SDP review":"Special Use (§ 5.3.2)";
     pw.rat="Hospital in "+z+". Viable for inpatient psychiatry and medical detox. "+
@@ -214,7 +214,7 @@ function runEPCEngine(f){
 
   // ──── HOSPITAL, CONVALESCENT ──────────────────────────────────
   tP("CONV","Hospital, Convalescent","Nursing/LTC/sub-acute (no LDC bed cap)","convHosp",999,(pw,perm)=>{
-    if(cadOBlock(pw,"convHosp"))return;
+    cadOBlock(pw,"convHosp");
     const isA=perm==="A";
     pw.proc=isA?"Allowed — SDP review":"Special Use (§ 5.3.2)";
     pw.rat="Hospital, Convalescent in "+z+". Ongoing care as principal function. Includes nursing homes, LTC. "+
@@ -280,7 +280,7 @@ function runEPCEngine(f){
   });
 
   // ──── EXISTING CONFORMING USE ─────────────────────────────────
-  const pNC={id:"NC",nm:"Existing conforming use",th:"Legally established + maintained",v:"no",mg:null,stops:[],cav:[...gC],proc:"No new app",rat:"",wf:[],rsk:{},rank:""};
+  const pNC={id:"NC",nm:"Legal Nonconforming Use Continuation",th:"Legally established + maintained",v:"no",mg:null,stops:[],cav:[...gC],proc:"No new app",rat:"",wf:[],rsk:{},rank:""};
   if(exRC==="yes"&&mnt==="yes"){
     pNC.v="yes";pNC.rat="Legally established and continuously maintained. Per § 5.6.2(A), pre-existing nonconforming use presumed to have required special use permit. Use may continue. Cannot change to different nonconforming use.";
     pNC.cav.push({msg:"Enlargement of nonconforming use requires variance of use or special use (§ 5.6.4)",cite:"§ 5.6.4",blocking:false});
@@ -300,11 +300,11 @@ function runEPCEngine(f){
   R.push(pNC);
 
   // ──── SP-03: Variance of Use fallback note ────────────────────
-  // Count how many pathways are blocked by zone eligibility alone
-  const zoneBlocked=R.filter(r=>r.v==="no"&&r.stops.some(s=>s.msg.startsWith("Not permitted in"))).length;
-  if(zoneBlocked>0){
-    // Add a global caveat about variance of use
-    gC.push({msg:"Variance of use (§ 5.3.3) available for uses not permitted in this zone — BoCC approval, exercised sparingly. Fee: $5,551. Not available in PUD.",cite:"§ 5.3.3",blocking:false,resolve:"Consult land use counsel before pursuing."});
+  const varianceCav={msg:"Variance of use (§ 5.3.3) available for uses not permitted in this zone — BoCC approval, exercised sparingly. Fee: $5,551. Not available in PUD.",cite:"§ 5.3.3",blocking:false,resolve:"Consult land use counsel before pursuing."};
+  const zoneBlocked=R.filter(r=>r.v==="no"&&r.stops.some(s=>s.msg.startsWith("Not permitted in")));
+  if(zoneBlocked.length>0){
+    zoneBlocked.forEach(r=>r.cav.push(varianceCav));
+    gC.push(varianceCav);
   }
 
   return{zone:z,gS,gC,results:R,p2:"pass"};

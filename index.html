@@ -23,16 +23,23 @@
   </div>
 </div>
 <div id="app"></div>
+<noscript><p style="padding:2rem;color:#F09595;text-align:center;">Pathway Analyzer requires JavaScript to run.</p></noscript>
 <div class="footer">
-  <div class="footer-left"><span class="footer-dot"></span> Engine v18</div>
-  <div class="footer-right">DZC Art. 11 · COS UDC Ch. 7 · EPC LDC Ch. 5 · Source authority only</div>
+  <div class="footer-left"><span class="footer-dot"></span> Engine v22</div>
+  <div class="footer-right">DZC Art. 11 · COS UDC Ch. 7 · EPC LDC Ch. 5 · Manitou LUDC Title 18 · Source authority only</div>
 </div>
-<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js')}</script>
+<div id="sw-banner" style="display:none" role="alert">
+  <span id="sw-banner-msg">App updated — reload for the latest version.</span>
+  <button onclick="location.reload()" style="margin-left:12px;background:#4ADE80;color:#000;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;">Reload</button>
+  <button onclick="document.getElementById('sw-banner').style.display='none'" style="margin-left:6px;background:none;border:none;color:#9B9BA7;cursor:pointer;font-size:14px;" aria-label="Dismiss">&times;</button>
+</div>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js');navigator.serviceWorker.addEventListener('message',function(e){if(e.data&&e.data.type==='SW_UPDATED'){document.getElementById('sw-banner').style.display='flex'}})}</script>
 <script src="js/config.js"></script>
 <script src="js/state.js"></script>
 <script src="js/engine-denver.js"></script>
 <script src="js/engine-cos.js"></script>
 <script src="js/engine-epc.js"></script>
+<script src="js/engine-manitou.js"></script>
 <script src="js/gis.js"></script>
 <script src="js/glossary.js"></script>
 <script src="js/ui.js"></script>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pathway-v18';
+const CACHE_NAME = 'pathway-v22';
 const ASSETS = [
   './',
   './index.html',
@@ -8,9 +8,11 @@ const ASSETS = [
   './js/engine-denver.js',
   './js/engine-cos.js',
   './js/engine-epc.js',
+  './js/engine-manitou.js',
   './js/gis.js',
   './js/glossary.js',
   './js/ui.js',
+  './icon-180.png',
   './icon-192.png',
   './icon-512.png',
   './manifest.json'
@@ -31,6 +33,9 @@ self.addEventListener('activate', e => {
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
+    .then(() => self.clients.matchAll().then(cs =>
+      cs.forEach(c => c.postMessage({ type: 'SW_UPDATED', version: CACHE_NAME }))
+    ))
   );
 });
 
@@ -38,15 +43,30 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
+  // Network-only API calls with offline fallback
+  const apiOffline = () => new Response(JSON.stringify({features:[],error:"Network unavailable"}),{headers:{"Content-Type":"application/json"}});
+
   // ArcGIS API calls: always go to network (never cache)
   if (url.hostname.includes('arcgis')) {
-    e.respondWith(fetch(e.request));
+    e.respondWith(fetch(e.request).catch(apiOffline));
     return;
   }
 
   // Colorado state API calls: always go to network
   if (url.hostname.includes('dwr.state.co.us') || url.hostname.includes('gis.colorado.gov')) {
-    e.respondWith(fetch(e.request));
+    e.respondWith(fetch(e.request).catch(apiOffline));
+    return;
+  }
+
+  // Spatialest property record API: always go to network
+  if (url.hostname.includes('spatialest.com')) {
+    e.respondWith(fetch(e.request).catch(apiOffline));
+    return;
+  }
+
+  // FEMA hazard layers: always go to network
+  if (url.hostname.includes('fema.gov')) {
+    e.respondWith(fetch(e.request).catch(apiOffline));
     return;
   }
 
