@@ -24,7 +24,7 @@ function createDefaultForm(){
 
 function createDefaultState(){
   return{
-    jurisdiction:null,
+    jurisdiction:null,autoDetectPhase:null,autoDetectError:null,
     pg:0,
     form:createDefaultForm(),
     results:null,activeTab:"dashboard",expanded:{},

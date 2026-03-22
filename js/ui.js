@@ -129,14 +129,25 @@ function render(){
 
   /* ── Jurisdiction selector ─────────────────────────────────── */
   if(page.id==="jurisdiction"){
-    h+=`<p class="q-title">Select jurisdiction</p>`;
-    h+=`<p class="q-sub">Choose the city for this property analysis.</p>`;
-    h+=`<div class="jur-card ${ST.jurisdiction==="denver"?"sel":""}" role="button" tabindex="0" aria-label="Select Denver" onclick="ST.jurisdiction='denver';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">Denver</p><p class="jur-desc">Denver Zoning Code — Residential Care Types 1–4 (DZC Art. 11, §§ 11.2.8–11.2.12)</p></div>`;
-    h+=`<div class="jur-card ${ST.jurisdiction==="cos"?"sel":""}" role="button" tabindex="0" aria-label="Select Colorado Springs" onclick="ST.jurisdiction='cos';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">Colorado Springs</p><p class="jur-desc">Unified Development Code — Group Living / Human Services Establishment (UDC Ch. 7, § 7.3.301E)</p></div>`;
-    h+=`<div class="jur-card ${ST.jurisdiction==="epc"?"sel":""}" role="button" tabindex="0" aria-label="Select El Paso County" onclick="ST.jurisdiction='epc';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">El Paso County</p><p class="jur-desc">Land Development Code — Group Home / Institutional BH Pathways (LDC Ch. 5, § 5.2.17) · SP-05 enforcement policy active</p></div>`;
-    h+=`<div class="jur-card ${ST.jurisdiction==="manitou"?"sel":""}" role="button" tabindex="0" aria-label="Select Manitou Springs" onclick="ST.jurisdiction='manitou';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">Manitou Springs</p><p class="jur-desc">Land Use &amp; Development Code — Group Home, LTC, Medical &amp; Boarding Pathways (LUDC Title 18)</p></div>`;
+    h+=`<p class="q-title">Property address</p>`;
+    h+=`<p class="q-sub">Enter the street address and the tool will automatically detect which jurisdiction applies.</p>`;
+    if(ST.autoDetectPhase==="searching"){
+      h+=`<div class="addr-row"><input type="text" id="auto-addr" class="addr-input" aria-label="Enter property address" value="${esc(ST.form.address||"")}" placeholder="e.g. 1680 Sherman St, 123 Manitou Ave" disabled /><button class="btn-primary addr-btn" disabled>Looking up\u2026</button></div>`;
+      h+=`<div class="lookup-status"><span class="spinner"></span>Searching all jurisdictions\u2026</div>`;
+    }else{
+      h+=`<div class="addr-row"><input type="text" id="auto-addr" class="addr-input" aria-label="Enter property address" value="${esc(ST.form.address||"")}" placeholder="e.g. 1680 Sherman St, 123 Manitou Ave" /><button class="btn-primary addr-btn" onclick="autoDetectStart()">Look up</button></div>`;
+      if(ST.autoDetectPhase==="error"){h+=`<div class="lookup-error">${esc(ST.autoDetectError)}</div>`}
+    }
+    h+=`<div class="jur-divider"><span>or select jurisdiction manually</span></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="denver"?"sel":""}" role="button" tabindex="0" aria-label="Select Denver" onclick="ST.autoDetectPhase=null;ST.jurisdiction='denver';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">Denver</p><p class="jur-desc">Denver Zoning Code — Residential Care Types 1–4 (DZC Art. 11, §§ 11.2.8–11.2.12)</p></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="cos"?"sel":""}" role="button" tabindex="0" aria-label="Select Colorado Springs" onclick="ST.autoDetectPhase=null;ST.jurisdiction='cos';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">Colorado Springs</p><p class="jur-desc">Unified Development Code — Group Living / Human Services Establishment (UDC Ch. 7, § 7.3.301E)</p></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="epc"?"sel":""}" role="button" tabindex="0" aria-label="Select El Paso County" onclick="ST.autoDetectPhase=null;ST.jurisdiction='epc';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">El Paso County</p><p class="jur-desc">Land Development Code — Group Home / Institutional BH Pathways (LDC Ch. 5, § 5.2.17) · SP-05 enforcement policy active</p></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="manitou"?"sel":""}" role="button" tabindex="0" aria-label="Select Manitou Springs" onclick="ST.autoDetectPhase=null;ST.jurisdiction='manitou';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">Manitou Springs</p><p class="jur-desc">Land Use &amp; Development Code — Group Home, LTC, Medical &amp; Boarding Pathways (LUDC Title 18)</p></div>`;
     if(ST.jurisdiction){h+=`<div class="btn-row"><button class="btn-primary" onclick="advance()">Next</button></div>`}
-    APP.innerHTML=h;return;
+    APP.innerHTML=h;
+    const autoInput=document.getElementById("auto-addr");
+    if(autoInput&&ST.autoDetectPhase!=="searching"){autoInput.focus();autoInput.addEventListener("keydown",e=>{if(e.key==="Enter")autoDetectStart()})}
+    return;
   }
 
   /* ── DENVER INTAKE PAGES (unchanged from v12) ──────────────── */

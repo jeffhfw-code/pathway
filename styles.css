@@ -146,6 +146,8 @@ a.cite:hover{color:#6EA4E8;text-decoration:underline}
 .jur-card.sel{border-color:#4A7FBF;background:rgba(46,90,160,.1)}
 .jur-card .jur-name{font-size:15px;font-weight:500;margin:0 0 4px;color:#E8E8EC}
 .jur-card .jur-desc{font-size:12px;color:#6B6B78;margin:0;line-height:1.5}
+.jur-divider{display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:#6B6B78;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.jur-divider::before,.jur-divider::after{content:"";flex:1;height:1px;background:#2A2A3A}
 
 /* ── Checkbox row for COS ─────────────────────────────────────── */
 .check-row{display:flex;flex-wrap:wrap;gap:8px}
