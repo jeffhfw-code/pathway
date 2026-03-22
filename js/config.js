@@ -117,6 +117,7 @@ function getSp(z){
 const COS_ZL=["A","R-E","R-1 9","R-1 6","R-2","R-4","R-5","R-Flex Low","R-Flex Med","R-Flex High","OR","MX-N","MX-T","MX-M","MX-L","MX-I","FBZ","BP","LI","GI","APD","PF","PK","PDZ","NNA-O South","NNA-O Central","NNA-O North"];
 const COS_ZG={"Residential":{list:["A","R-E","R-1 9","R-1 6","R-2","R-4","R-5","R-Flex Low","R-Flex Med","R-Flex High"]},"Office/Mixed-Use":{list:["OR","MX-N","MX-T","MX-M","MX-L","MX-I"]},"Form-Based/Planned":{list:["FBZ","PDZ"]},"Employment/Industrial":{list:["BP","LI","GI"]},"Special Purpose":{list:["APD","PF","PK"]},"NNA Overlay":{list:["NNA-O South","NNA-O Central","NNA-O North"]}};
 const COS_UT={};
+// gcl = Group Care Living — populated per Table 7.3.2-A but no engine pathway yet (reserved)
 function cZ(zones,glrS,glrM,glrL,hseS,hseM,hseL,gcl,ltc,detox,hospice,shelter){
   zones.forEach(z=>{COS_UT[z]={glrS,glrM,glrL,hseS,hseM,hseL,gcl,ltc,detox,hospice,shelter}});
 }
@@ -145,15 +146,9 @@ cZ(["PK"],     "N","N","N","N","N","N","N","N","N","N","N");
 cZ(["NNA-O South"],  "P","P","P","P","P","P","C","P","N","P","P");
 cZ(["NNA-O Central"],"C","C","C","C","C","C","N","C","N","C","C");
 cZ(["NNA-O North"],  "C","C","C","C","C","C","C","C","N","C","C");
-
-function cosOverlayMod(overlays,useKey){
-  if(!overlays||!overlays.length)return null;
-  if(overlays.includes("AP-O: ADNL"))return"C";
-  if(overlays.some(o=>o.includes("RPZ")))return null;
-  if(overlays.some(o=>o.includes("APZ-1")||o.includes("APZ-2")||o.includes("ANAV")))return"P";
-  if(overlays.includes("SS-O"))return null;
-  return null;
-}
+// FBZ/PDZ: plan-based zones — conservative "C" baseline; engine gate logic (lines 38-46) overrides per plan status
+cZ(["FBZ"],    "C","C","C","C","C","C","C","C","C","C","C");
+cZ(["PDZ"],    "C","C","C","C","C","C","C","C","C","C","C");
 
 /* ═══════════════════════════════════════════════════════════════════
    EL PASO COUNTY — Zone List + Use Table (LDC Table 5-1)
@@ -201,30 +196,6 @@ const EPC_GH_ZONES=new Set(["F-5","A-35","A-5","RR-5","RR-2.5","RR-0.5","RS-2000
 function epcIsGHZone(z){return EPC_GH_ZONES.has(z)}
 function epcIsCommercial(z){return["CC","CR","CS","C-1","C-2","M"].includes(z)}
 
-/* ── EPC Water/Sewer Infrastructure District Mapping ──────────── */
-const EPC_INFRA_DISTRICTS={
-  WOODMOOR:     "Woodmoor Water & Sanitation District No. 1",
-  "VILLAGE CENTER @ WOODMOOR": "Woodmoor Water & Sanitation District No. 1",
-  "MISTY ACRES": "Woodmoor Water & Sanitation District No. 1",
-  "HIGBY":       "Woodmoor Water & Sanitation District No. 1",
-  "LAKE OF THE ROCKIES": "Woodmoor Water & Sanitation District No. 1",
-  TRIVIEW:      "Triview Metropolitan District",
-  "JACKSON CREEK": "Triview Metropolitan District",
-  "REGENCY":    "Triview Metropolitan District",
-  "SANCTUARY POINTE": "Triview Metropolitan District",
-  "KING'S DEER": "Triview Metropolitan District",
-  "SECURITY":   "Security-Widefield Water & Sanitation District",
-  "WIDEFIELD":  "Security-Widefield Water & Sanitation District",
-  "FOUNTAINVIEW": "Security-Widefield Water & Sanitation District",
-  "LORSON RANCH": "Security-Widefield Water & Sanitation District",
-  GLENEAGLE:    "Donala Water & Sanitation District",
-  DONALA:       "Donala Water & Sanitation District",
-  "STRUTHERS":  "Donala Water & Sanitation District",
-  CHEROKEE:     "Cherokee Metropolitan District",
-  "MONUMENT LAKE": "Monument Sanitation District",
-  "WOODMEN HILLS": "Woodmen Hills Metropolitan District",
-};
-
 /* ── Spatialest Property Record API (El Paso County) ──────────── */
 const SPATIALEST_API="https://property.spatialest.com/co/elpaso/api/v1/recordcard";
 
@@ -268,18 +239,13 @@ function manIsComm(z){return MAN_COMM.has(z)}
 function manIsPublic(z){return z==="OS"||z==="P"||z==="PF"}
 
 /* ── Manitou Springs Title 15 Occupancy Cap Calculator ──────── */
+// Title 15 § 15.08.120 graduated table: [minSqft, maxOccupants]
+const TITLE_15_TABLE=[[175,1],[250,2],[325,3],[400,4],[475,5],[535,6]];
 function manTitle15Cap(sqft){
-  if(sqft===null||sqft===undefined)return null;
-  if(sqft<100)return 0;
-  if(sqft<175)return 1;
-  if(sqft<250)return 2;
-  if(sqft<325)return 3;
-  if(sqft<400)return 4;
-  if(sqft<475)return 5;
-  if(sqft<535)return 6;
-  // 6 + floor((sqft - 475) / 60), but cap formula requirement at 850 sf
-  const extra=Math.floor((Math.min(sqft,850)-475)/60);
-  return 6+extra;
+  if(sqft===null||sqft===undefined||sqft<=0)return null;
+  for(const[threshold,cap] of TITLE_15_TABLE){if(sqft<=threshold)return cap}
+  // Above 535 sf: 6 + floor((sqft - 475) / 60), capped at 850 sf per § 15.08.120
+  return 6+Math.floor((Math.min(sqft,850)-475)/60);
 }
 
 /* ── GIS Phase Valid Transitions (state machine) ──────────────── */

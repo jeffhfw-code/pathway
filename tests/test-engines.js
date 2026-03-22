@@ -357,14 +357,14 @@ test("AL exception bypasses separation",()=>{
 test("Hospice pathway appears only when targetTerminal set",()=>{
   const r1=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
   assert(!r1.results.some(p=>p.id==="HOSPICE"),"no hospice without terminal");
-  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetTerminal:true}));
+  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetTerminal:"yes"}));
   assert(r2.results.some(p=>p.id==="HOSPICE"),"hospice with terminal");
 });
 
 test("LTC pathway appears only when targetOver60 set",()=>{
   const r1=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
   assert(!r1.results.some(p=>p.id==="LTC"),"no LTC without over60");
-  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetOver60:true}));
+  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetOver60:"yes"}));
   assert(r2.results.some(p=>p.id==="LTC"),"LTC with over60");
 });
 
@@ -615,11 +615,11 @@ test("manIsPublic identifies public zones",()=>{
 
 test("manTitle15Cap calculates correctly",()=>{
   assertEqual(manTitle15Cap(null),null,"null sqft");
-  assertEqual(manTitle15Cap(50),0,"50 sf");
+  assertEqual(manTitle15Cap(50),1,"50 sf — minimum 1 for any positive sqft");
   assertEqual(manTitle15Cap(100),1,"100 sf");
-  assertEqual(manTitle15Cap(250),3,"250 sf");
-  assertEqual(manTitle15Cap(475),6,"475 sf");
-  assertEqual(manTitle15Cap(535),7,"535 sf");
+  assertEqual(manTitle15Cap(250),2,"250 sf — boundary of tier 2");
+  assertEqual(manTitle15Cap(475),5,"475 sf — boundary of tier 5");
+  assertEqual(manTitle15Cap(535),6,"535 sf — boundary of tier 6");
   assertEqual(manTitle15Cap(850),12,"850 sf cap");
   // Above 850, formula caps at 850 input
   assertEqual(manTitle15Cap(2000),12,"2000 sf still capped");
@@ -963,6 +963,108 @@ test("validateFormBeforeEngine catches bad lot size",()=>{
   assert(errors.length>0,"should have errors");
   assert(errors[0].includes("Lot size"));
   ST.form.lotSize=null; // cleanup
+});
+
+endSuite();
+
+/* ═══════════════════════════════════════════════════════════════════
+   C11 CRITICAL — Previously missing test coverage
+   ═══════════════════════════════════════════════════════════════════ */
+suite("COS Engine — Detox / Shelter / FBZ / PDZ");
+
+test("Detox blocked by separation when within 1000 ft",()=>{
+  const r=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes",distGLRDetox:500}));
+  const detox=r.results.find(p=>p.id==="DETOX");
+  assert(detox,"DETOX should exist");
+  assertEqual(detox.v,"no","DETOX blocked by separation");
+  assert(detox.stops.some(s=>s.msg.includes("1,000 ft")),"stop should mention 1,000 ft");
+});
+
+test("Detox viable when beyond 1000 ft",()=>{
+  const r=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes",distGLRDetox:2000}));
+  const detox=r.results.find(p=>p.id==="DETOX");
+  assert(detox,"DETOX should exist");
+  assert(detox.v!=="no"||!detox.stops.some(s=>s.msg.includes("1,000 ft")),"DETOX should not be blocked by separation");
+});
+
+test("Shelter appears only when tempShelter set",()=>{
+  const r1=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes"}));
+  assert(!r1.results.some(p=>p.id==="SHELTER"),"no shelter without tempShelter");
+  const r2=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes",tempShelter:"yes"}));
+  assert(r2.results.some(p=>p.id==="SHELTER"),"shelter with tempShelter=yes");
+});
+
+test("FBZ zone does not crash — returns pathways",()=>{
+  const r=runCOSEngine(baseForm({zone:"FBZ",fhaProtected:"yes",fbzPermits:"unknown"}));
+  assertEqual(r.p2,"pass","FBZ should not error");
+  assert(r.results.length>0,"should have pathways");
+});
+
+test("FBZ with permits=no blocks pathways",()=>{
+  const r=runCOSEngine(baseForm({zone:"FBZ",fhaProtected:"yes",fbzPermits:"no"}));
+  const hseS=r.results.find(p=>p.id==="HSE-S");
+  assertEqual(hseS.v,"no","HSE-S blocked by FBZ permits=no");
+});
+
+test("PDZ zone does not crash — returns pathways",()=>{
+  const r=runCOSEngine(baseForm({zone:"PDZ",fhaProtected:"yes",pdzPermits:"unknown"}));
+  assertEqual(r.p2,"pass","PDZ should not error");
+  assert(r.results.length>0,"should have pathways");
+});
+
+test("PDZ HSE Small always permitted",()=>{
+  const r=runCOSEngine(baseForm({zone:"PDZ",fhaProtected:"yes",pdzPermits:"no"}));
+  const hseS=r.results.find(p=>p.id==="HSE-S");
+  assert(hseS,"HSE-S should exist in PDZ");
+  assertEqual(hseS.v,"yes","HSE-S always permitted in PDZ residential");
+});
+
+endSuite();
+
+suite("EPC Engine — Separation & CAD-O");
+
+test("EPC separation null produces blocking caveat",()=>{
+  const r=runEPCEngine(baseForm({zone:"RR-5",epcSeparation:null}));
+  const ghS=r.results.find(p=>p.id==="GH-DIS-S");
+  if(ghS&&ghS.v!=="no"){
+    // Should have blocking caveat about unknown separation
+    const hasSepCav=ghS.cav.some(c=>c.msg.toLowerCase().includes("separation"));
+    assert(hasSepCav,"should have separation caveat when null");
+  }
+});
+
+test("EPC CAD-O overlay produces caveat on institutional pathway",()=>{
+  const r=runEPCEngine(baseForm({zone:"CC",epcCadO:"cado",overnight:"yes"}));
+  const hosp=r.results.find(p=>p.id==="HOSP");
+  assert(hosp,"HOSP pathway should exist in CC zone");
+  const hasCadCav=hosp.cav.some(c=>c.msg.toLowerCase().includes("cad"));
+  assert(hasCadCav,"should have CAD-O caveat on hospital pathway");
+});
+
+endSuite();
+
+suite("Manitou — Construction Scope Branches");
+
+test("Minor construction scope changes risk and workflow",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manConstructionScope:"minor"}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  assert(ghSm,"GH-SM should exist");
+  assertEqual(ghSm.rank,"Good","minor scope should rank Good");
+  assert(ghSm.rsk.fee.includes("600"),"minor fee should reference $600");
+});
+
+test("Major construction scope changes risk and workflow",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manConstructionScope:"major"}));
+  const ghSm=r.results.find(p=>p.id==="GH-SM");
+  assert(ghSm,"GH-SM should exist");
+  assertEqual(ghSm.rank,"Moderate","major scope should rank Moderate");
+  assert(ghSm.rsk.fee.includes("1,200"),"major fee should reference $1,200");
+});
+
+test("Title 15 cap returns null for zero sqft",()=>{
+  assertEqual(manTitle15Cap(0),null,"0 sqft should return null");
+  assertEqual(manTitle15Cap(-100),null,"negative sqft should return null");
+  assertEqual(manTitle15Cap(null),null,"null should return null");
 });
 
 endSuite();

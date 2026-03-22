@@ -5,11 +5,11 @@
 const APP=document.getElementById("app");
 
 /* ── Shared Helpers ───────────────────────────────────────────── */
-function setR(k,v){ST.form[k]=v;render()}
+function setR(k,v){if(/^[a-zA-Z0-9_]+$/.test(k))ST.form[k]=v;render()}
 function r2(k,v){return`<button class="radio-btn ${v==="yes"?"sel":""}" onclick="setR('${k}','yes')">Yes</button><button class="radio-btn ${v==="no"?"sel":""}" onclick="setR('${k}','no')">No</button>`}
 function r3(k,v){return`<button class="radio-btn ${v==="yes"?"sel":""}" onclick="setR('${k}','yes')">Yes</button><button class="radio-btn ${v==="no"?"sel":""}" onclick="setR('${k}','no')">No</button><button class="radio-btn ${v==="unknown"?"sel":""}" onclick="setR('${k}','unknown')">Unknown</button>`}
 function esc(s){return(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")}
-function citeLink(cite){const url=citeURL(cite,ST.jurisdiction);return url?`<a class="cite" href="${url}" target="_blank" rel="noopener">${cite}</a>`:`<span class="cite">${cite}</span>`}
+function citeLink(cite){const url=citeURL(cite,ST.jurisdiction);return url?`<a class="cite" href="${esc(url)}" target="_blank" rel="noopener">${cite}</a>`:`<span class="cite">${cite}</span>`}
 
 /* ═══════════════════════════════════════════════════════════════════
    WIZARD PAGES
@@ -147,13 +147,13 @@ function render(){
         h+=`<div class="addr-row"><input type="text" id="gis-addr" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 1680 Sherman St, 2901 Blake St" /><button class="btn-primary addr-btn" onclick="gisStartLookup()">Look up</button></div>`;
         if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip lookup — enter manually</button></div>`}
         else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped. You'll enter zone, lot size, and RC data manually in later steps.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('gis-addr').value||null;advance()">Next</button></div>`}
-        else{h+=`<div class="field-help">Press "Look up" to query Denver's ArcGIS layers, or leave blank and click Next to enter all data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('gis-addr').value||null;ST.gisPhase='skipped';advance()">Skip — enter manually</button></div>`}
+        else{h+=`<div class="field-help">Press "Look up" to query Denver's ArcGIS layers, or leave blank and click Next to enter all data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('gis-addr').value||null;setGisPhase('skipped');advance()">Skip — enter manually</button></div>`}
       }
       else if(ST.gisPhase==="searching"){h+=`<div class="lookup-status"><span class="spinner"></span>Searching Denver address points\u2026</div>`}
       else if(ST.gisPhase==="disambig"){
         h+=`<div style="margin:12px 0;"><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">Multiple addresses matched. Select the correct one:</p><ul class="disambig-list">`;
         ST.gisAddresses.forEach((a,i)=>{h+=`<li class="disambig-item" onclick="gisSelectAddress(${i})"><span class="disambig-addr">${esc(a.FULL_ADDRESS)}</span></li>`});
-        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.gisPhase='idle';render()">Try a different address</button></div>`;
+        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="setGisPhase('idle');render()">Try a different address</button></div>`;
       }
       else if(ST.gisPhase==="querying"){h+=`<div class="lookup-status"><span class="spinner"></span>Querying parcel, zoning, and RC facility layers\u2026</div>`}
       else if(ST.gisPhase==="done"){
@@ -188,7 +188,7 @@ function render(){
       if(addrInput){if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped")addrInput.focus();addrInput.addEventListener("keydown",e=>{if(e.key==="Enter")gisStartLookup()})}
       return;
     }
-    if(page.id==="zone"){
+    else if(page.id==="zone"){
       const autoSrc=ST.gisPhase==="done"&&ST.gisAutoZone&&ZL.includes(f.zone||"")&&!ST.gisOverrides.zone;
       h+=`<p class="q-title">Zone district</p><p class="q-sub">`;
       if(autoSrc)h+=`Auto-populated from ArcGIS. Confirm or change the zone district.`;else h+=`Select the zone district for this property.`;
@@ -200,7 +200,7 @@ function render(){
       if(!autoSrc){h+=`<div class="info-box"><strong>How to find your zone district:</strong><ol><li>Click the link above to open Denver's official zoning map.</li><li>Search for the property address.</li><li>Click the parcel — the zone district code appears in the popup.</li><li>Select the matching code above.</li></ol></div>`}
       h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
     }
-    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">${ST.jurisdiction==="denver"?"Residential Care is not permitted in any form":"No group living or human services uses are permitted"} in the <strong>${f.zone}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application (if available).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
+    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">${ST.jurisdiction==="denver"?"Residential Care is not permitted in any form":"No group living or human services uses are permitted"} in the <strong>${esc(f.zone)}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application (if available).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
     else if(page.id==="licensing"){h+=`<p class="q-title">Licensing and certification</p><p class="q-sub">Can the operator obtain all required state and City licensing or certification?</p><div class="radio-row">${r3("licensing",f.licensing)}</div><div class="btn-row">${bk}${f.licensing!==null?nx:""}</div>`}
     else if(page.id==="correctional"){h+=`<p class="q-title">Correctional supervision population</p><p class="q-sub">Will the facility serve non-paroled persons placed by a court, corrections department, or supervised transition program?</p><div class="radio-row">${r2("correctional",f.correctional)}</div><div class="field-help">Does not include parolees or voluntary participants.</div><div class="btn-row">${bk}${f.correctional!==null?nx:""}</div>`}
     else if(page.id==="op24hr"){h+=`<p class="q-title">24-hour operation</p><p class="q-sub">Will the facility operate 24 hours per day?</p><div class="radio-row">${r2("op24hr",f.op24hr)}</div><div class="btn-row">${bk}${f.op24hr!==null?nx:""}</div>`}
@@ -255,13 +255,13 @@ function render(){
         h+=`<div class="addr-row"><input type="text" id="cos-addr" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 1215 N Nevada Ave, 955 E Colorado Ave" /><button class="btn-primary addr-btn" onclick="cosGisStart()">Look up</button></div>`;
         if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip — enter manually</button></div>`}
         else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('cos-addr')?.value||null;advance()">Next</button></div>`}
-        else{h+=`<div class="field-help">Press "Look up" to query Colorado Springs GIS layers, or skip to enter data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('cos-addr')?.value||null;ST.gisPhase='skipped';advance()">Skip — enter manually</button></div>`}
+        else{h+=`<div class="field-help">Press "Look up" to query Colorado Springs GIS layers, or skip to enter data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('cos-addr')?.value||null;setGisPhase('skipped');advance()">Skip — enter manually</button></div>`}
       }
       else if(ST.gisPhase==="searching"){h+=`<div class="lookup-status"><span class="spinner"></span>Searching Colorado Springs address points\u2026</div>`}
       else if(ST.gisPhase==="disambig"){
         h+=`<div style="margin:12px 0;"><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">Multiple addresses matched:</p><ul class="disambig-list">`;
         ST.gisAddresses.forEach((a,i)=>{h+=`<li class="disambig-item" onclick="cosGisSelect(${i})"><span class="disambig-addr">${esc(a.FullAddress)}</span></li>`});
-        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.gisPhase='idle';render()">Try a different address</button></div>`;
+        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="setGisPhase('idle');render()">Try a different address</button></div>`;
       }
       else if(ST.gisPhase==="querying"){h+=`<div class="lookup-status"><span class="spinner"></span>Querying parcel, zoning, overlay, and facility layers\u2026</div>`}
       else if(ST.gisPhase==="done"){
@@ -289,7 +289,7 @@ function render(){
       if(ci){if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped")ci.focus();ci.addEventListener("keydown",e=>{if(e.key==="Enter")cosGisStart()})}
       return;
     }
-    if(page.id==="cosZone"){
+    else if(page.id==="cosZone"){
       const autoSrc=ST.gisPhase==="done"&&ST.gisAutoZone&&COS_ZL.includes(f.zone||"")&&!ST.gisOverrides.zone;
       h+=`<p class="q-title">Zone district</p><p class="q-sub">`;
       if(autoSrc)h+=`Auto-populated from ArcGIS. Confirm or change.`;else h+=`Select the zone district.`;
@@ -300,7 +300,7 @@ function render(){
       else h+=`<a class="gis-link" href="${COS_ZMAP}" target="_blank" rel="noopener">Open Colorado Springs zoning map &#8599;</a>`;
       h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
     }
-    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No group living or human services uses are permitted in the <strong>${f.zone}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application (if available).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
+    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No group living or human services uses are permitted in the <strong>${esc(f.zone)}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application (if available).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
     else if(page.id==="licensing"){h+=`<p class="q-title">Licensing and certification</p><p class="q-sub">Can the operator obtain all required state licensing or certification? (§ 7.3.107)</p><div class="radio-row">${r3("licensing",f.licensing)}</div><div class="btn-row">${bk}${f.licensing!==null?nx:""}</div>`}
     else if(page.id==="correctional"){h+=`<p class="q-title">Correctional supervision population</p><p class="q-sub">Will the facility serve persons under correctional supervision (parolees, probationers, court-ordered placement)?</p><div class="radio-row">${r2("correctional",f.correctional)}</div><div class="field-help">Correctional populations are NOT FHA-protected \u2014 facility must use GLR pathway, not HSE. (§ 7.6.301)</div><div class="btn-row">${bk}${f.correctional!==null?nx:""}</div>`}
     else if(page.id==="cosFHA"){
@@ -312,9 +312,9 @@ function render(){
     else if(page.id==="op24hr"){h+=`<p class="q-title">24-hour operation</p><p class="q-sub">Will the facility operate 24 hours per day?</p><div class="radio-row">${r2("op24hr",f.op24hr)}</div><div class="btn-row">${bk}${f.op24hr!==null?nx:""}</div>`}
     else if(page.id==="cosPopulation"){
       h+=`<p class="q-title">Target population</p><p class="q-sub">Select any that apply to determine eligibility for specialized use categories.</p>`;
-      h+=`<div style="margin-bottom:12px;"><label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 0;cursor:pointer;"><input type="checkbox" ${f.targetOver60?"checked":""} onchange="ST.form.targetOver60=this.checked;render()"> Residents exclusively over age 60 (Long-term Care Facility eligibility)</label>`;
-      h+=`<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 0;cursor:pointer;"><input type="checkbox" ${f.targetTerminal?"checked":""} onchange="ST.form.targetTerminal=this.checked;render()"> ≥ 9 terminally ill residents, life expectancy &lt; 6 months (Hospice eligibility)</label>`;
-      h+=`<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 0;cursor:pointer;"><input type="checkbox" ${f.tempShelter?"checked":""} onchange="ST.form.tempShelter=this.checked;render()"> Temporary shelter model, generally unlicensed (Human Services Shelter)</label></div>`;
+      h+=`<div style="margin-bottom:12px;"><label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 0;cursor:pointer;"><input type="checkbox" ${f.targetOver60==="yes"?"checked":""} onchange="ST.form.targetOver60=this.checked?'yes':'no';render()"> Residents exclusively over age 60 (Long-term Care Facility eligibility)</label>`;
+      h+=`<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 0;cursor:pointer;"><input type="checkbox" ${f.targetTerminal==="yes"?"checked":""} onchange="ST.form.targetTerminal=this.checked?'yes':'no';render()"> ≥ 9 terminally ill residents, life expectancy &lt; 6 months (Hospice eligibility)</label>`;
+      h+=`<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 0;cursor:pointer;"><input type="checkbox" ${f.tempShelter==="yes"?"checked":""} onchange="ST.form.tempShelter=this.checked?'yes':'no';render()"> Temporary shelter model, generally unlicensed (Human Services Shelter)</label></div>`;
       h+=`<div class="btn-row">${bk}${nx}</div>`;
     }
     else if(page.id==="cosDistance"){
@@ -355,13 +355,13 @@ function render(){
         h+=`<div class="addr-row"><input type="text" id="epc-addr" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 7250 Campus Dr, 11525 Ridgeline Dr" /><button class="btn-primary addr-btn" onclick="epcGisStart()">Look up</button></div>`;
         if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip — enter manually</button></div>`}
         else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('epc-addr')?.value||null;advance()">Next</button></div>`}
-        else{h+=`<div class="field-help">Press "Look up" to query EPC zoning and parcel layers, or skip to enter manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('epc-addr')?.value||null;ST.gisPhase='skipped';advance()">Skip — enter manually</button></div>`}
+        else{h+=`<div class="field-help">Press "Look up" to query EPC zoning and parcel layers, or skip to enter manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('epc-addr')?.value||null;setGisPhase('skipped');advance()">Skip — enter manually</button></div>`}
       }
       else if(ST.gisPhase==="searching"){h+=`<div class="lookup-status"><span class="spinner"></span>Geocoding address\u2026</div>`}
       else if(ST.gisPhase==="disambig"){
         h+=`<div style="margin:12px 0;"><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">Multiple addresses matched. Select the correct one:</p><ul class="disambig-list">`;
         ST.gisAddresses.forEach((a,i)=>{h+=`<li class="disambig-item" onclick="epcGisSelect(${i})"><span class="disambig-addr">${esc(a.addr)}</span></li>`});
-        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.gisPhase='idle';render()">Try a different address</button></div>`;
+        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="setGisPhase('idle');render()">Try a different address</button></div>`;
       }
       else if(ST.gisPhase==="querying"){h+=`<div class="lookup-status"><span class="spinner"></span>Querying zoning, parcel, and overlay layers\u2026</div>`}
       else if(ST.gisPhase==="done"){
@@ -439,7 +439,7 @@ function render(){
       h+=`<p style="font-size:12px;color:#6B6B78;margin:0;">Contact El Paso County PCD to obtain the PUD plan for this property.</p></div>`;
       h+=`<div class="btn-row"><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`;
     }
-    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No behavioral health or residential care uses are permitted in the <strong>${f.zone}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a Special Use application (if available for this use type).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
+    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No behavioral health or residential care uses are permitted in the <strong>${esc(f.zone)}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a Special Use application (if available for this use type).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
     else if(page.id==="licensing"){h+=`<p class="q-title">Licensing and certification</p><p class="q-sub">Can the operator obtain all required state licensing or certification?</p><div class="radio-row">${r3("licensing",f.licensing)}</div><div class="info-box">State licensing is required for mental illness and DD group homes (C.R.S. § 30-28-115). CARR certification is voluntary for recovery residences. The PCD Director memo (SP-05) does not waive state licensing requirements.</div><div class="btn-row">${bk}${f.licensing!==null?nx:""}</div>`}
     else if(page.id==="correctional"){h+=`<p class="q-title">Correctional supervision</p><p class="q-sub">Will the facility serve persons on probation or parole?</p><div class="radio-row">${r2("correctional",f.correctional)}</div><div class="field-help">Affects Half-Way House pathway eligibility and mental illness group home exclusion rules.</div><div class="btn-row">${bk}${f.correctional!==null?nx:""}</div>`}
     else if(page.id==="epcSexOffender"){h+=`<p class="q-title">Sex offender population</p><p class="q-sub">Will the facility include any person required to register as a sex offender (C.R.S. § 18-3-412.5)?</p><div class="radio-row">${r3("epcSexOffender",f.epcSexOffender)}</div><div class="field-help">Group homes may not include registered sex offenders unless related by blood, marriage, adoption, or in foster care (§ 5.2.17(C)(2)).</div><div class="btn-row">${bk}${f.epcSexOffender!==null?nx:""}</div>`}
@@ -467,13 +467,13 @@ function render(){
         h+=`<div class="addr-row"><input type="text" id="manAddrInput" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 606 Manitou Ave, 10 Old Man's Trail" /><button class="btn-primary addr-btn" onclick="manGisStart()">Look up</button></div>`;
         if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip — enter manually</button></div>`}
         else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('manAddrInput')?.value||null;advance()">Next</button></div>`}
-        else{h+=`<div class="field-help">Press "Look up" to geocode, or skip to enter all data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('manAddrInput')?.value||null;ST.gisPhase='skipped';advance()">Skip — enter manually</button></div>`}
+        else{h+=`<div class="field-help">Press "Look up" to geocode, or skip to enter all data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('manAddrInput')?.value||null;setGisPhase('skipped');advance()">Skip — enter manually</button></div>`}
       }
       else if(ST.gisPhase==="searching"){h+=`<div class="lookup-status"><span class="spinner"></span>Geocoding address\u2026</div>`}
       else if(ST.gisPhase==="disambig"){
         h+=`<div style="margin:12px 0;"><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">Multiple addresses matched. Select the correct one:</p><ul class="disambig-list">`;
         ST.gisAddresses.forEach((a,i)=>{h+=`<li class="disambig-item" onclick="manGisSelect(${i})"><span class="disambig-addr">${esc(a.attributes?a.attributes.Match_addr:a.addr||"Unknown")}</span></li>`});
-        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.gisPhase='idle';render()">Try a different address</button></div>`;
+        h+=`</ul></div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="setGisPhase('idle');render()">Try a different address</button></div>`;
       }
       else if(ST.gisPhase==="querying"){h+=`<div class="lookup-status"><span class="spinner"></span>Looking up property data\u2026</div>`}
       else if(ST.gisPhase==="done"){
@@ -518,7 +518,7 @@ function render(){
       else h+=`<a class="gis-link" href="${MAN_ZMAP}" target="_blank" rel="noopener">Open Manitou Springs zoning map &#8599;</a>`;
       h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
     }
-    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No behavioral health or residential care uses are permitted in the <strong>${f.zone}</strong> zone district. Open Space, Parks, and Public Facilities zones do not allow residential or institutional uses.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application ($1,090).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
+    else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No behavioral health or residential care uses are permitted in the <strong>${esc(f.zone)}</strong> zone district. Open Space, Parks, and Public Facilities zones do not allow residential or institutional uses.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application ($1,090).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
     else if(page.id==="manTreatment"){
       h+=`<p class="q-title">On-site treatment</p><p class="q-sub">Will the facility provide on-site medical treatment for substance use disorders (SUD)?</p>`;
       h+=`<div class="radio-row">${r3("manOnSiteTreatment",f.manOnSiteTreatment)}</div>`;
@@ -623,9 +623,9 @@ function rFacts(){
     }
   } else {
     items.push(["Correctional",f.correctional||"\u2014"],["FHA-protected",f.fhaProtected||"\u2014"],["24-hour",f.op24hr||"\u2014"]);
-    if(f.targetOver60)items.push(["Over 60 population","Yes"]);
-    if(f.targetTerminal)items.push(["Terminal/hospice","Yes"]);
-    if(f.tempShelter)items.push(["Temporary shelter","Yes"]);
+    if(f.targetOver60==="yes")items.push(["Over 60 population","Yes"]);
+    if(f.targetTerminal==="yes")items.push(["Terminal/hospice","Yes"]);
+    if(f.tempShelter==="yes")items.push(["Temporary shelter","Yes"]);
     items.push(["Construction",f.constructionType||"\u2014"]);
     if(f.distGLRDetox!=null)items.push(["Dist. to GLR/Detox",f.distGLRDetox.toLocaleString()+" ft"]);
     if(f.nearestAL==="yes")items.push(["Nearest is AL","Yes"]);
@@ -657,7 +657,7 @@ function go(){
    RESULTS RENDERER (shared — handles all jurisdictions)
    ═══════════════════════════════════════════════════════════════════ */
 function renderRes(){
-  const R=ST.results;if(R.error){APP.innerHTML=`<div style="padding:1rem 0;"><div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">${R.error}</p><p style="font-size:13px;color:#9B9BA7;margin:0;">The intended use is prohibited under the applicable rules. No viable pathway exists, and continuing the analysis is unnecessary because this result is dispositive.</p></div><div class="btn-row" style="margin-top:16px;"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.results=null;ST.pg=0;render()">Back to inputs</button></div></div>`;return}
+  const R=ST.results;if(R.error){APP.innerHTML=`<div style="padding:1rem 0;"><div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">${esc(R.error)}</p><p style="font-size:13px;color:#9B9BA7;margin:0;">The intended use is prohibited under the applicable rules. No viable pathway exists, and continuing the analysis is unnecessary because this result is dispositive.</p></div><div class="btn-row" style="margin-top:16px;"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.results=null;ST.pg=0;render()">Back to inputs</button></div></div>`;return}
   const vi=R.results.filter(r=>r.v==="yes"||r.v==="conditional"),nv=R.results.filter(r=>r.v==="no");
   let best=0;vi.forEach(r=>{const n=r.mg===999?9999:(r.mg||0);if(n>best)best=n});
   const bL=best===9999?"No UDC cap":best===0?"\u2014":String(best);
@@ -668,7 +668,7 @@ function renderRes(){
   let h=`<div class="dash-header"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><div><p class="dash-title">${esc(ST.form.address)||"Analysis"}</p><p class="dash-sub">${R.zone}${ST.form.lotSize?" · "+ST.form.lotSize.toLocaleString()+" sf":""} · ${jurLabel}</p></div><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn-secondary" onclick="shareURL()" style="padding:6px 12px;font-size:12px;">Share</button><button class="btn-secondary" onclick="doSave()" style="padding:6px 12px;font-size:12px;">Save</button><button class="btn-secondary" onclick="window.print()" style="padding:6px 12px;font-size:12px;">Print / PDF</button><button class="btn-secondary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()" style="padding:6px 12px;font-size:12px;">New analysis</button></div></div></div>`;
   // Change monitoring banner
   const _vd=ENGINE_VERIFIED[ST.jurisdiction];if(_vd){const _ds=Math.floor((Date.now()-new Date(_vd).getTime())/864e5);if(_ds>90)h+=`<div style="background:#2E2410;border:1px solid #5A4A20;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:12px;color:#FBBF24;">&#9888; Engine rules last verified ${_ds} days ago (${_vd}). Code changes may have occurred. Review before relying on results.</div>`}
-  if(R.p2==="fail"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem;"><p style="font-size:14px;font-weight:500;color:#F09595;margin:0 0 4px;">All pathways blocked</p><p style="font-size:13px;color:#D87070;margin:0;">${R.gS.map(s=>s.msg+" "+citeLink(s.cite)).join("; ")}</p></div>`;h+=rFacts();APP.innerHTML=h;return}
+  if(R.p2==="fail"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem;"><p style="font-size:14px;font-weight:500;color:#F09595;margin:0 0 4px;">All pathways blocked</p><p style="font-size:13px;color:#D87070;margin:0;">${R.gS.map(s=>esc(s.msg)+" "+citeLink(s.cite)).join("; ")}</p></div><div class="btn-row" style="margin-bottom:1.5rem;"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.results=null;ST.pg=0;render()">Back to inputs</button></div>`;h+=rFacts();APP.innerHTML=h;return}
   h+=`<div class="summary-row"><div class="stat-card"><p class="stat-label">Viable pathways</p><p class="stat-val green">${vi.length}</p></div><div class="stat-card"><p class="stat-label">Highest viable count</p><p class="stat-val">${bL}</p></div><div class="stat-card"><p class="stat-label">Open caveats</p><p class="stat-val ${blk>0?"amber":""}">${allC.length}${blk?" ("+blk+" blocking)":""}</p></div></div>`;
   h+=`<div class="tab-row"><button class="tab-btn ${ST.activeTab==="dashboard"?"active":""}" onclick="ST.activeTab='dashboard';render()">Pathways</button><button class="tab-btn ${ST.activeTab==="caveats"?"active":""}" onclick="ST.activeTab='caveats';render()">Caveats (${allC.length})</button><button class="tab-btn ${ST.activeTab==="costs"?"active":""}" onclick="ST.activeTab='costs';render()">Costs</button><button class="tab-btn ${ST.activeTab==="checklist"?"active":""}" onclick="ST.activeTab='checklist';render()">Checklist</button><button class="tab-btn ${ST.activeTab==="facts"?"active":""}" onclick="ST.activeTab='facts';render()">Site facts</button></div>`;
   if(ST.activeTab==="dashboard"){
@@ -689,8 +689,9 @@ function renderRes(){
       if(isWell)h+=`<div style="font-size:11px;color:#555568;margin-top:4px;">Water supply and OWTS capacity may limit max bed count independent of zoning approval. Run water/wastewater analysis for this address.</div>`;
       h+=`</div></div>`;
     }
-    if(vi.length)h+=`<p class="section-label">Viable</p>`+vi.map(pwC).join("");if(nv.length)h+=`<p class="section-label">Not Viable</p>`+nv.map(pwC).join("")}
-  else if(ST.activeTab==="caveats"){if(!allC.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No open caveats on viable pathways.</p>`;else allC.forEach(c=>{h+=`<div class="caveat-card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span>${citeLink(c.cite)}</div><p class="caveat-title">${c.msg}</p><p class="caveat-meta"><strong>Affects:</strong> ${c.paths.join(", ")}</p>${c.resolve?`<p class="caveat-meta"><strong>Resolve:</strong> ${c.resolve}</p>`:""}</div>`})}
+    if(!vi.length&&!nv.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No pathways returned by engine.</p>`;
+    else{if(vi.length)h+=`<p class="section-label">Viable</p>`+vi.map(pwC).join("");if(nv.length)h+=`<p class="section-label">Not Viable</p>`+nv.map(pwC).join("")}}
+  else if(ST.activeTab==="caveats"){if(!allC.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No open caveats on viable pathways.</p>`;else allC.forEach(c=>{h+=`<div class="caveat-card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span>${citeLink(c.cite)}</div><p class="caveat-title">${esc(c.msg)}</p><p class="caveat-meta"><strong>Affects:</strong> ${c.paths.map(esc).join(", ")}</p>${c.resolve?`<p class="caveat-meta"><strong>Resolve:</strong> ${esc(c.resolve)}</p>`:""}</div>`})}
   else if(ST.activeTab==="costs"){
     h+=`<p class="section-label">Cost Estimates by Viable Pathway</p>`;
     if(!viCo.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No viable or conditional pathways.</p>`;
@@ -744,19 +745,19 @@ function renderRes(){
 }
 
 function pwC(r){
-  const bc=r.v==="no"?"badge-no":"badge-yes",bt=r.v==="no"?"Not Viable":"Viable";
+  const bc=r.v==="no"?"badge-no":r.v==="conditional"?"badge-cond":"badge-yes",bt=r.v==="no"?"Not Viable":r.v==="conditional"?"Conditional":"Viable";
   let ct="";if(r.v!=="no"){if(r.mg===999)ct="no cap";else if(!r.mg)ct="TBD";else ct="up to "+r.mg+" residents"}
   const isO=ST.expanded[r.id]||false;let d="";
   if(r.v!=="no"){
-    d+=`<div class="detail-section"><div class="detail-heading">Why viable</div><p class="detail-text">${r.rat}</p></div>`;
-    if(r.wf.length){d+=`<div class="detail-section"><div class="detail-heading">Workflow</div>`;r.wf.forEach((w,i)=>{d+=`<div class="wf-step"><div class="wf-num">${i+1}</div><div class="wf-text">${w.t}</div></div>`});d+=`</div>`}
+    d+=`<div class="detail-section"><div class="detail-heading">Why viable</div><p class="detail-text">${esc(r.rat)}</p></div>`;
+    if(r.wf.length){d+=`<div class="detail-section"><div class="detail-heading">Workflow</div>`;r.wf.forEach((w,i)=>{d+=`<div class="wf-step"><div class="wf-num">${i+1}</div><div class="wf-text">${esc(w.t)}</div></div>`});d+=`</div>`}
     d+=`<div class="detail-section"><div class="detail-heading">Risk</div><div class="risk-row">`;
     const rl={nimby:"NIMBY",escalation:"Escalation",timeline:"Timeline",discretion:"Discretion",approval:"Approval",clock:"Review clock",fee:"Fee"};
-    Object.entries(r.rsk).forEach(([k,v])=>{d+=`<div class="risk-item"><div class="risk-label">${rl[k]||k}</div><div class="risk-val">${v}</div></div>`});
+    Object.entries(r.rsk).forEach(([k,v])=>{d+=`<div class="risk-item"><div class="risk-label">${rl[k]||k}</div><div class="risk-val">${esc(v)}</div></div>`});
     d+=`</div></div>`;
-    if(r.cav.length){d+=`<div class="detail-section"><div class="detail-heading">Caveats (${r.cav.length})</div>`;r.cav.forEach(c=>{d+=`<div style="margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span> <span style="font-size:13px;color:#9B9BA7;">${c.msg}</span> ${citeLink(c.cite)}</div>`});d+=`</div>`}
-    d+=`<div class="detail-section"><div class="detail-heading">Assessment</div><p class="detail-text"><strong>${r.rank}</strong>${r.proc?" · "+r.proc:""}</p></div>`;
-  } else {d+=`<div class="detail-section"><div class="detail-heading">Why not viable</div>`;r.stops.forEach(s=>{d+=`<div style="margin-bottom:6px;"><span class="stop-pill stop-hard">Hard stop</span> <span style="font-size:13px;color:#9B9BA7;">${s.msg}</span> ${citeLink(s.cite)}</div>`});d+=`</div>`}
+    if(r.cav.length){d+=`<div class="detail-section"><div class="detail-heading">Caveats (${r.cav.length})</div>`;r.cav.forEach(c=>{d+=`<div style="margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span> <span style="font-size:13px;color:#9B9BA7;">${esc(c.msg)}</span> ${citeLink(c.cite)}</div>`});d+=`</div>`}
+    d+=`<div class="detail-section"><div class="detail-heading">Assessment</div><p class="detail-text"><strong>${esc(r.rank)}</strong>${r.proc?" · "+esc(r.proc):""}</p></div>`;
+  } else {d+=`<div class="detail-section"><div class="detail-heading">Why not viable</div>`;r.stops.forEach(s=>{d+=`<div style="margin-bottom:6px;"><span class="stop-pill stop-hard">Hard stop</span> <span style="font-size:13px;color:#9B9BA7;">${esc(s.msg)}</span> ${citeLink(s.cite)}</div>`});d+=`</div>`}
   return`<div class="pw-card"><div class="pw-card-head" data-id="${r.id}"><span class="pw-badge ${bc}">${bt}</span><span class="pw-name">${r.nm}</span><span class="pw-count">${ct}</span><span class="pw-arrow ${isO?"open":""}">&#9654;</span></div><div class="pw-detail ${isO?"open":""}">${d}</div></div>`;
 }
 
@@ -842,9 +843,10 @@ function getPathwayDocs(r){
 function doSave(){
   if(!ST.results||ST.results.error)return;
   const R=ST.results;
-  const vi=R.results.filter(r=>r.v==="yes");
+  const vi=R.results.filter(r=>r.v==="yes"||r.v==="conditional");
   let best=0;vi.forEach(r=>{const n=r.mg===999?9999:(r.mg||0);if(n>best)best=n});
-  const blk=R.results.filter(r=>r.v==="conditional").length;
+  const allC=[];vi.forEach(r=>r.cav.forEach(c=>{if(!allC.find(x=>x.msg===c.msg))allC.push(c)}));
+  const blk=allC.filter(c=>c.blocking).length;
   saveAnalysis({viableCount:vi.length,maxBeds:best,blockerCount:blk});
   const t=document.createElement("div");
   t.textContent="Analysis saved!";
@@ -907,8 +909,8 @@ function renderComparison(){
   const rows=[
     ["Jurisdiction",r=>({denver:"Denver",cos:"Colorado Springs",epc:"El Paso County",manitou:"Manitou Springs"})[r.analysis.jurisdiction]],
     ["Zone",r=>r.analysis.zone||"\u2014"],
-    ["Viable",r=>{const n=r.results.error?0:r.results.results.filter(x=>x.v==="yes").length;return`<span style="color:${n>0?"#4ADE80":"#F09595"};font-weight:600;">${n}</span>`}],
-    ["Max beds",r=>{if(r.results.error)return"\u2014";const vi=r.results.results.filter(x=>x.v==="yes");let best=0;vi.forEach(x=>{const n=x.mg===999?9999:(x.mg||0);if(n>best)best=n});return best===9999?"No cap":best===0?"\u2014":String(best)}],
+    ["Viable",r=>{const n=r.results.error?0:r.results.results.filter(x=>x.v==="yes"||x.v==="conditional").length;return`<span style="color:${n>0?"#4ADE80":"#F09595"};font-weight:600;">${n}</span>`}],
+    ["Max beds",r=>{if(r.results.error)return"\u2014";const vi=r.results.results.filter(x=>x.v==="yes"||x.v==="conditional");let best=0;vi.forEach(x=>{const n=x.mg===999?9999:(x.mg||0);if(n>best)best=n});return best===9999?"No cap":best===0?"\u2014":String(best)}],
     ["Conditional",r=>r.results.error?"\u2014":String(r.results.results.filter(x=>x.v==="conditional").length)],
     ["Blockers",r=>{if(r.results.error)return esc(r.results.error);const stops=r.results.gS||[];return stops.length?stops.map(s=>s.msg).join("; "):"None"}]
   ];
@@ -920,7 +922,7 @@ function renderComparison(){
   h+=`<tr><td style="padding:8px;border-bottom:1px solid #1E1E2E;color:#9B9BA7;vertical-align:top;">Viable pathways</td>`;
   results.forEach(r=>{
     if(r.results.error){h+=`<td style="padding:8px;border-bottom:1px solid #1E1E2E;text-align:center;color:#9B9BA7;">\u2014</td>`;return}
-    const vi=r.results.results.filter(x=>x.v==="yes").map(x=>x.nm);
+    const vi=r.results.results.filter(x=>x.v==="yes"||x.v==="conditional").map(x=>x.nm);
     h+=`<td style="padding:8px;border-bottom:1px solid #1E1E2E;text-align:center;color:#E8E8EC;font-size:11px;">${vi.length?vi.join("<br>"):"\u2014"}</td>`;
   });
   h+=`</tr></tbody></table></div>`;

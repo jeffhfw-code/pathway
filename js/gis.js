@@ -3,6 +3,9 @@
    Dependencies: config.js (endpoints), state.js (ST, setGisPhase)
    ═══════════════════════════════════════════════════════════════════ */
 
+/* ── Shared: Escape single quotes for ArcGIS WHERE clauses ───── */
+function gisSqlEsc(s){return s.replace(/'/g,"''")}
+
 /* ── Shared: Haversine distance ───────────────────────────────── */
 function gisHav(a1,o1,a2,o2){
   const R=3958.8,dLa=(a2-a1)*Math.PI/180,dLo=(o2-o1)*Math.PI/180;
@@ -58,12 +61,13 @@ function gisNormalize(raw){
 
 async function gisFindAddresses(raw){
   const norm=gisNormalize(raw);
-  const queries=[`FULL_ADDRESS='${norm}'`,`FULL_ADDRESS LIKE '${norm}%'`];
+  const safe=gisSqlEsc(norm);
+  const queries=[`FULL_ADDRESS='${safe}'`,`FULL_ADDRESS LIKE '${safe}%'`];
   const m=norm.match(/^(\d+)\s+(.+?)(?:\s+(ST|AVE|BLVD|DR|CT|PL|LN|WAY|CIR|PKWY|RD))?\s*$/);
-  if(m){const num=m[1];const street=m[2].replace(/^[NSEW]\s+/,"");queries.push(`ADDRESS_NUMBER=${num} AND STREET_NAME LIKE '${street}%'`)}
+  if(m){const num=m[1];const street=gisSqlEsc(m[2].replace(/^[NSEW]\s+/,""));queries.push(`ADDRESS_NUMBER=${num} AND STREET_NAME LIKE '${street}%'`)}
   for(const where of queries){
     const url=`${ADDR_LAYER}?where=${encodeURIComponent(where)}&outFields=FULL_ADDRESS,LATITUDE,LONGITUDE&returnGeometry=false&resultRecordCount=10&f=json`;
-    const res=await fetch(url);const data=await res.json();
+    const res=await fetch(url);if(!res.ok)continue;const data=await res.json();
     const feats=(data.features||[]).map(f=>f.attributes);
     if(feats.length>0){
       if(feats.length===1)return feats;
@@ -137,12 +141,13 @@ function cosNormalize(raw){
 
 async function cosFindAddresses(raw){
   const norm=cosNormalize(raw);
-  const queries=[`FullAddress='${norm}'`,`FullAddress LIKE '${norm}%'`];
+  const safe=gisSqlEsc(norm);
+  const queries=[`FullAddress='${safe}'`,`FullAddress LIKE '${safe}%'`];
   const m=norm.match(/^(\d+)\s+([NSEW]\s+)?(.+?)(?:\s+(ST|AVE|BLVD|DR|CT|PL|LN|WAY|CIR|PKWY|RD|TER))?\s*$/);
-  if(m){queries.push(`Add_Number=${m[1]} AND FullAddress LIKE '%${m[3]}%'`)}
+  if(m){queries.push(`Add_Number=${m[1]} AND FullAddress LIKE '%${gisSqlEsc(m[3])}%'`)}
   for(const where of queries){
     const url=`${COS_ADDR}?where=${encodeURIComponent(where)}&outFields=FullAddress,Add_Number&returnGeometry=true&outSR=4326&resultRecordCount=10&f=json`;
-    const res=await fetch(url);const data=await res.json();
+    const res=await fetch(url);if(!res.ok)continue;const data=await res.json();
     const feats=(data.features||[]).map(f=>({...f.attributes,x:f.geometry.x,y:f.geometry.y}));
     if(feats.length>0){
       const bases=new Map();
@@ -215,7 +220,8 @@ async function cosGisRun(addr){
     ST.cosAutoALR=data.alrCount;
     ST.cosAutoCUP=data.cupFiles;
     ST.cosAutoUV=data.uvFiles;
-    const relevantFac=data.facilities.filter(f=>f.type==="Assisted Living Residence"||f.type==="Nursing Facilities");
+    // Proxy: CDPHE data has ALR/Nursing but not GLR/Detox categories — distance is approximate
+    const relevantFac=data.facilities.filter(f=>f.type==="Assisted Living Residence"||f.type==="Nursing Facilities"||f.type==="Substance Use Disorder Treatment"||f.type==="Detoxification Facility");
     const nearestRelevant=relevantFac.length?relevantFac[0]:null;
     ST.cosAutoNearestFacDist=nearestRelevant?nearestRelevant.ft:null;
     ST.cosAutoNearestFacName=nearestRelevant?nearestRelevant.name:null;
@@ -245,7 +251,7 @@ function cosGisApply(){
 async function epcFindCandidates(raw){
   const q=encodeURIComponent(raw.replace(/,?\s*(el\s*paso\s*county|CO|Colorado|\d{5}(-\d{4})?)[\s,]*/gi," ").trim());
   const gUrl=`${EPC_GEOCODE}?SingleLine=${q}&searchExtent=${EPC_BBOX}&outFields=Addr_type,Match_addr,StAddr&maxLocations=5&f=json`;
-  const gRes=await fetch(gUrl);const gData=await gRes.json();
+  const gRes=await fetch(gUrl);if(!gRes.ok)return[];const gData=await gRes.json();
   const candidates=(gData.candidates||[]).filter(c=>c.score>=80);
   // Transform to unified format for disambiguation
   return candidates;
@@ -362,17 +368,18 @@ async function epcWaterSewerCheck(addressStr,lat,lon){
   ST.epcInfraStatus=null;ST.epcInfraDistrict=null;ST.epcInfraChecking=true;render();
   try{
     const gP=`geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=NAME&returnGeometry=false&f=json`;
-    const[swdRes,sanRes]=await Promise.all([
+    const[swdRes,sanRes,waterRes]=await Promise.all([
       fetch(`${EPC_DIST_SWD}?${gP}`).then(r=>r.json()).catch(()=>({features:[]})),
       fetch(`${EPC_DIST_SAN}?${gP}`).then(r=>r.json()).catch(()=>({features:[]})),
+      fetch(`${EPC_DIST_WATER}?${gP}`).then(r=>r.json()).catch(()=>({features:[]})),
     ]);
     const names=[];
-    for(const data of[swdRes,sanRes]){
+    for(const data of[swdRes,sanRes,waterRes]){
       (data.features||[]).forEach(f=>{if(f.attributes?.NAME)names.push(f.attributes.NAME)});
     }
     const unique=[...new Set(names)];
     if(unique.length>0){
-      const formatted=unique.map(n=>n.replace(/\bSWD\b/,"Water & Sanitation District").replace(/\bWD\b/,"Water District").replace(/\bSD\b/,"Sanitation District").replace(/\bMD\b/,"Metropolitan District").replace(/([A-Z]+)/g,w=>w.charAt(0)+w.slice(1).toLowerCase())).join("; ");
+      const formatted=unique.map(n=>n.replace(/\bSWD\b/,"Water & Sanitation District").replace(/\bWD\b/,"Water District").replace(/\bSD\b/,"Sanitation District").replace(/\bMD\b/,"Metropolitan District").replace(/\b([A-Z])([A-Z]+)\b/g,(m,first,rest)=>first+rest.toLowerCase())).join("; ");
       ST.epcInfraStatus="district";ST.epcInfraDistrict=formatted;
     } else {
       ST.epcInfraStatus="well-septic";ST.epcInfraDistrict=null;

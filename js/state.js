@@ -28,6 +28,7 @@ function createDefaultState(){
     pg:0,
     form:createDefaultForm(),
     results:null,activeTab:"dashboard",expanded:{},
+    showSaved:false,showCompare:false,showGlossary:false,compareIds:[],checklistState:{},glossaryFilter:"all",
     gisPhase:"idle",gisError:null,gisAddresses:null,gisData:null,
     gisAutoZone:null,gisAutoLot:null,gisAutoRC:null,gisAutoRC34:null,
     gisAutoDist34:null,gisOverrides:{},
@@ -139,16 +140,28 @@ function stateToHash(){
       f[k]=v;
     }
   }
-  return"#"+btoa(JSON.stringify({j:ST.jurisdiction,f}));
+  return"#"+btoa(unescape(encodeURIComponent(JSON.stringify({j:ST.jurisdiction,f}))));
 }
 
 function hydrateFromHash(){
   if(!location.hash||location.hash.length<2)return false;
   try{
-    const payload=JSON.parse(atob(location.hash.slice(1)));
-    if(payload.j&&payload.f){
+    const payload=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(1)))));
+    if(payload.j&&payload.f&&typeof payload.f==="object"&&!Array.isArray(payload.f)){
+      const validJurs=["denver","cos","epc","manitou"];
+      if(!validJurs.includes(payload.j))return false;
+      // Only allow keys that exist in the default form (prevent prototype pollution)
+      const defaults=createDefaultForm();
+      const safeForm={};
+      for(const k of Object.keys(payload.f)){
+        if(k==="__proto__"||k==="constructor"||k==="prototype")continue;
+        if(!(k in defaults))continue;
+        const v=payload.f[k];
+        if(v!==null&&typeof v==="object"&&!Array.isArray(v))continue;
+        safeForm[k]=v;
+      }
       ST.jurisdiction=payload.j;
-      ST.form=Object.assign(createDefaultForm(),payload.f);
+      ST.form=Object.assign(createDefaultForm(),safeForm);
       return true;
     }
   }catch(e){console.warn("Invalid hash:",e)}

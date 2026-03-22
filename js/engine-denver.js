@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════════════════════ */
 function runEngine(f){
   const z=f.zone,ut=UT[z];if(!ut)return{error:"Zone not found."};
-  const lot=f.lotSize||0,rcN=f.rcWithin1mi||0,rc34=f.rcType34within1mi||0,d34=f.distType34||999999,cor=f.correctional==="yes",rel=f.religious==="yes",lic=f.licensing,exRC=f.existingRC,mnt=f.maintained;
+  const lot=f.lotSize||0,rcN=f.rcWithin1mi||0,rc34=f.rcType34within1mi||0,d34=f.distType34!=null?f.distType34:999999,cor=f.correctional==="yes",rel=f.religious==="yes",lic=f.licensing,exRC=f.existingRC,mnt=f.maintained;
   const R=[],gS=[],gC=[];
   if(lic==="no")gS.push({msg:"Cannot obtain licensing/certification",cite:"§ 11.2.8.1.B.1"});
   if(lic==="unknown")gC.push({msg:"Licensing status unknown",cite:"§ 11.2.8.1.B.1",blocking:true,resolve:"Confirm with CPD and state agency."});

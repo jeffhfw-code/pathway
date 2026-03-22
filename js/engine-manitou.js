@@ -36,7 +36,7 @@ function runManitouEngine(f){
 
   // G-13: Title 15 dwelling unit occupancy cap (auto-calculated from assessor sqft)
   const t15Cap=manTitle15Cap(duSqft);
-  const t15Caveat=duSqft?{msg:"Title 15 § 15.08.120 limits this "+duSqft+" sf dwelling unit to approximately "+t15Cap+" persons. Applicability to group homes is interpretive (see Unknown #14). Square footage source: El Paso County Assessor (proxy for IBC gross floor area — verify for precision).",cite:"Title 15 § 15.08.120",blocking:false}
+  const t15Caveat=(duSqft&&duSqft>0)?{msg:"Title 15 § 15.08.120 limits this "+duSqft+" sf dwelling unit to approximately "+t15Cap+" persons. Applicability to group homes is interpretive (see Unknown #14). Square footage source: El Paso County Assessor (proxy for IBC gross floor area — verify for precision).",cite:"Title 15 § 15.08.120",blocking:false}
     :{msg:"Building square footage not available from assessor records — Title 15 § 15.08.120 occupancy cap cannot be calculated. This cap can constrain bed count below the zoning limit. Obtain actual gross floor area and apply the Title 15 graduated occupancy table.",cite:"Title 15 § 15.08.120",blocking:false};
 
   // G-10: Commercial zone noise standard
@@ -91,8 +91,8 @@ function runManitouEngine(f){
   // ──── Title 15 cap — constrain controlling max per pathway ───
   function t15Cav(pw){
     pw.cav.push(t15Caveat);
-    // If Title 15 cap is calculable, constrain the pathway's max bed count
-    if(t15Cap!==null&&pw.mg!==null&&pw.mg!==0){
+    // If Title 15 cap is calculable and positive, constrain the pathway's max bed count
+    if(t15Cap!==null&&t15Cap>0&&pw.mg!==null&&pw.mg!==0){
       if(t15Cap<pw.mg){
         pw.mg=t15Cap;
         pw.cav.push({msg:"Title 15 cap ("+t15Cap+" persons for "+duSqft+" sf) is more restrictive than the zoning maximum. Controlling max bed count reduced to "+t15Cap+".",cite:"Title 15 § 15.08.120",blocking:false});
@@ -355,12 +355,12 @@ function runManitouEngine(f){
 
   if(preexist==="yes"||(exRC==="yes")){
     // G-03: Discontinuance
-    if(monthsDisc!==null&&monthsDisc>=12){
+    if(monthsDisc!=null&&monthsDisc>=12){
       pNC.stops.push({msg:"Use discontinued for "+monthsDisc+" months (≥ 12) — nonconforming status lost. Only conforming uses may resume.",cite:"§ 18.01.7.1(C)"});
-    } else if(monthsDisc!==null&&monthsDisc>0&&monthsDisc<12){
+    } else if(monthsDisc!=null&&monthsDisc>0&&monthsDisc<12){
       pNC.v="conditional";
       pNC.cav.push({msg:"Use discontinued for "+monthsDisc+" months — nonconforming status still valid but at risk. 12-month discontinuance terminates status.",cite:"§ 18.01.7.1(C)",blocking:false});
-    } else if(monthsDisc===null){
+    } else if(monthsDisc==null){
       pNC.cav.push({msg:"Months discontinued unknown — verify that the prior use has not been discontinued for 12+ months.",cite:"§ 18.01.7.1(C)",blocking:true,resolve:"Research continuity with Planning Department records."});
     }
 
@@ -400,9 +400,11 @@ function runManitouEngine(f){
   R.push(pNC);
 
   // ──── SP-03: Informational note for zone-blocked pathways ───
-  const zoneBlocked=R.filter(r=>r.v==="no"&&r.stops.some(s=>s.msg.startsWith("Not permitted in"))).length;
-  if(zoneBlocked>0){
-    gC.push({msg:"Variance cannot authorize a prohibited use (§ 18.06.4.2(G)). Only rezoning ($1,090) can make a non-permitted use available in this zone.",cite:"§ 18.06.4.2(G)",blocking:false});
+  const rezoneCav={msg:"Variance cannot authorize a prohibited use (§ 18.06.4.2(G)). Only rezoning ($1,090) can make a non-permitted use available in this zone.",cite:"§ 18.06.4.2(G)",blocking:false};
+  const zoneBlocked=R.filter(r=>r.v==="no"&&r.stops.some(s=>s.msg.startsWith("Not permitted in")));
+  if(zoneBlocked.length>0){
+    zoneBlocked.forEach(r=>r.cav.push(rezoneCav));
+    gC.push(rezoneCav);
   }
 
   return{zone:z,gS,gC,results:R,p2:gS.length?"fail":"pass"};

@@ -24,7 +24,7 @@ input,select,button,textarea{font-family:inherit}
 /* ── Form elements ────────────────────────────────────────────── */
 .q-title{font-size:17px;font-weight:500;margin:0 0 6px;color:#E8E8EC}
 .q-sub{font-size:13px;color:#9B9BA7;margin:0 0 16px;line-height:1.55}
-.field-help{font-size:12px;color:#6B6B78;margin-top:6px;line-height:1.55}
+.field-help{font-size:12px;color:#8A8A9A;margin-top:6px;line-height:1.55}
 .gis-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#6EA4E8;text-decoration:none;margin-top:6px;font-weight:500}.gis-link:hover{text-decoration:underline;color:#8EBAF0}
 .radio-row{display:flex;gap:8px;flex-wrap:wrap}
 .radio-btn{padding:8px 18px;font-size:13px;border:1.5px solid #2A2A3A;border-radius:6px;cursor:pointer;background:transparent;color:#9B9BA7;transition:all .12s}
@@ -155,8 +155,8 @@ a.cite:hover{color:#6EA4E8;text-decoration:underline}
 
 /* ── Footer ───────────────────────────────────────────────────── */
 .footer{border-top:1px solid #1E1E2E;padding:20px 1.5rem;padding-bottom:max(20px,env(safe-area-inset-bottom));margin-top:3rem;display:flex;justify-content:space-between;align-items:center;max-width:860px;margin-left:auto;margin-right:auto}
-.footer-left{font-size:11px;color:#555568;font-weight:500;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:6px}
-.footer-right{font-size:10px;color:#3A3A4D;letter-spacing:.04em;text-transform:uppercase}
+.footer-left{font-size:11px;color:#7A7A8E;font-weight:500;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.footer-right{font-size:10px;color:#6B6B7F;letter-spacing:.04em;text-transform:uppercase}
 .footer-dot{width:6px;height:6px;border-radius:50%;background:#4ADE80}
 
 /* ── Address lookup row ───────────────────────────────────────── */
@@ -270,7 +270,7 @@ a.cite:hover{color:#6EA4E8;text-decoration:underline}
   .stat-val{color:#000}.stat-val.green{color:#1a7a2e}.stat-val.amber{color:#996b00}
   .summary-row{margin-bottom:12pt}
   .pw-card{break-inside:avoid;border:1pt solid #ccc;margin-bottom:8pt}
-  .pw-card-head{cursor:default}
+  .pw-card-head{cursor:default}.pw-arrow{display:none!important}
   .pw-detail{display:block!important;max-height:none!important;overflow:visible!important;opacity:1!important;padding:8pt 12pt!important}
   .pw-badge{border:1pt solid #999;font-size:9pt}
   .badge-yes{background:#d4edda;color:#155724;border-color:#c3e6cb}

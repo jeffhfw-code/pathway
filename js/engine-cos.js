@@ -9,10 +9,11 @@ function runCOSEngine(f){
   const fha=cor?false:(f.fhaProtected==="yes");
   const fhaUnk=!cor&&f.fhaProtected==="unknown";
   const lic=f.licensing;
-  const dist=f.distGLRDetox||999999;
+  const distRaw=f.distGLRDetox;
+  const dist=distRaw!=null?distRaw:999999;
+  const distUnknown=distRaw==null;
   const alException=f.nearestAL==="yes";
   const exRC=f.existingRC,mnt=f.maintained;
-  const ct=f.constructionType;
   const R=[],gS=[],gC=[];
 
   // Pass 2 — General rules
@@ -22,13 +23,6 @@ function runCOSEngine(f){
 
   // Manager referral risk — applies to all admin pathways
   const mgrCav={msg:"Manager may refer to Planning Commission (§ 7.5.408)",cite:"§ 7.5.408",blocking:false,resolve:"Cannot be eliminated; flag as escalation risk."};
-
-  // Dev plan needed?
-  function needsDevPlan(size){
-    if(size==="small"&&ct==="existing")return false;
-    if(size==="small"&&ct==="conversion")return false; // SFR exemption § 7.5.515B.2.a
-    return ct==="new"||ct==="conversion";
-  }
 
   // Pathway tester
   function tP(id,nm,th,utKey,maxRes,fn){
@@ -119,7 +113,6 @@ function runCOSEngine(f){
     tP("HSE-M","HSE Medium"+fhaLabel,"9–15 residents","hseM",15,(pw,perm)=>{
       if(fhaUnk)pw.cav.push({msg:"FHA status unconfirmed",cite:"§ 7.6.301",blocking:true,resolve:"Confirm population FHA status."});
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
-      const dp=needsDevPlan("medium");
       const isCUP=perm==="C";
       pw.proc=isCUP?"CUP + Dev Plan":"Admin + Dev Plan";
       pw.rat="HSE Medium in "+z+". 9–15 residents. No separation rule. Dev Plan required (§ 7.3.301E.2.a).";
@@ -148,15 +141,19 @@ function runCOSEngine(f){
     });
   }
 
+  // Separation check — hoisted so all pathways (GLR, DETOX, etc.) can access it
+  const sepApplies=dist<1000&&!alException;
+
   // === GLR pathways (non-FHA or unknown) ===
+  const distUnkCav=distUnknown?{msg:"Distance to nearest GLR/Detox facility unknown — 1,000-ft separation rule (§ 7.3.301E.1.a) cannot be verified. Measure before filing.",cite:"§ 7.3.301E.1.a",blocking:true,resolve:"Measure straight-line distance to nearest GLR or Detox facility."}:null;
   if(!fha||fhaUnk){
     const glrLabel=fhaUnk?" (if not FHA-protected)":"";
-    const sepApplies=dist<1000&&!alException;
 
     tP("GLR-S","GLR Small"+glrLabel,"≤ 8 residents","glrS",8,(pw,perm)=>{
       if(fhaUnk)pw.cav.push({msg:"If population IS FHA-protected, use HSE instead",cite:"§ 7.6.301",blocking:false});
       if(sepApplies){pw.stops.push({msg:"Within 1,000 ft of GLR/Detox ("+Math.round(dist).toLocaleString()+" ft)",cite:"§ 7.3.301E.1.a"});return}
       if(dist<1000&&alException)pw.cav.push({msg:"AL exception applied — verify both are AL-licensed",cite:"§ 7.3.301E.1.b",blocking:true,resolve:"Confirm with COS Planning."});
+      if(distUnkCav)pw.cav.push(distUnkCav);
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
       const isCUP=perm==="C";
       pw.proc=isCUP?"CUP":"Admin";
@@ -174,6 +171,7 @@ function runCOSEngine(f){
       if(fhaUnk)pw.cav.push({msg:"If FHA-protected, use HSE instead",cite:"§ 7.6.301",blocking:false});
       if(sepApplies){pw.stops.push({msg:"Within 1,000 ft of GLR/Detox",cite:"§ 7.3.301E.1.a"});return}
       if(dist<1000&&alException)pw.cav.push({msg:"AL exception — verify both AL-licensed",cite:"§ 7.3.301E.1.b",blocking:true,resolve:"Confirm with COS Planning."});
+      if(distUnkCav)pw.cav.push(distUnkCav);
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
       const isCUP=perm==="C";
       pw.proc=isCUP?"CUP + Dev Plan":"Admin + Dev Plan";
@@ -191,6 +189,7 @@ function runCOSEngine(f){
       if(fhaUnk)pw.cav.push({msg:"If FHA-protected, use HSE instead",cite:"§ 7.6.301",blocking:false});
       if(sepApplies){pw.stops.push({msg:"Within 1,000 ft of GLR/Detox",cite:"§ 7.3.301E.1.a"});return}
       if(dist<1000&&alException)pw.cav.push({msg:"AL exception — verify both AL-licensed",cite:"§ 7.3.301E.1.b",blocking:true,resolve:"Confirm with COS Planning."});
+      if(distUnkCav)pw.cav.push(distUnkCav);
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
       const isCUP=perm==="C";
       pw.proc=isCUP?"CUP + Dev Plan":"Admin + Dev Plan";
@@ -207,16 +206,18 @@ function runCOSEngine(f){
 
   // === Detoxification Center ===
   tP("DETOX","Detoxification Center","24-hr medical detox","detox",999,(pw,perm)=>{
-    if(sepApplies=dist<1000&&!alException){pw.stops.push({msg:"Within 1,000 ft of GLR/Detox",cite:"§ 7.3.301E.1.a"});return}
+    if(sepApplies){pw.stops.push({msg:"Within 1,000 ft of GLR/Detox",cite:"§ 7.3.301E.1.a"});return}
+    if(distUnkCav)pw.cav.push(distUnkCav);
     pw.cav.push(noClockCav);
-    pw.proc="CUP + Dev Plan";
-    pw.rat="Detox Center in "+z+". Conditional in most zones. CUP required.";
-    pw.wf=[...WF_CUP];
+    const detoxIsCUP=perm==="C";
+    pw.proc=detoxIsCUP?"CUP + Dev Plan":"Permitted";
+    pw.rat="Detox Center in "+z+"."+(detoxIsCUP?" Conditional — CUP required.":" Permitted by right.");
+    pw.wf=detoxIsCUP?[...WF_CUP]:[{t:"Confirm zoning compliance"},{t:"File site plan"},{t:"Obtain state license"},{t:"Begin operations"}];
     pw.rsk={nimby:"Very high",escalation:"High",timeline:"3–6 months",discretion:"Significant",approval:"High",fee:"$1,445 + $1,520+/acre"};pw.rank="Very Hard";
   });
 
   // === Hospice ===
-  if(f.targetTerminal){
+  if(f.targetTerminal==="yes"){
     tP("HOSPICE","Hospice","≥ 9 terminal, < 6 months","hospice",999,(pw,perm)=>{
       pw.cav.push(noClockCav);
       const isCUP=perm==="C";
@@ -233,7 +234,7 @@ function runCOSEngine(f){
   }
 
   // === Long-term Care Facility ===
-  if(f.targetOver60){
+  if(f.targetOver60==="yes"){
     tP("LTC","Long-term Care Facility","Persons over 60","ltc",999,(pw,perm)=>{
       pw.cav.push(noClockCav);
       const isCUP=perm==="C";
@@ -250,7 +251,7 @@ function runCOSEngine(f){
   }
 
   // === Human Services Shelter ===
-  if(f.tempShelter){
+  if(f.tempShelter==="yes"){
     tP("SHELTER","Human Services Shelter","Temporary group lodging","shelter",999,(pw,perm)=>{
       pw.cav.push(noClockCav);
       const isCUP=perm==="C";
