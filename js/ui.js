@@ -109,6 +109,7 @@ function goBack(){if(ST.pg>0){ST.pg--;render()}}
 /* ═══════════════════════════════════════════════════════════════════
    RENDER — MAIN ROUTER
    ═══════════════════════════════════════════════════════════════════ */
+let _prevPg=-1;
 function render(){
   if(ST.showSaved){renderSavedList();return}
   if(ST.showCompare){renderComparison();return}
@@ -130,10 +131,10 @@ function render(){
   if(page.id==="jurisdiction"){
     h+=`<p class="q-title">Select jurisdiction</p>`;
     h+=`<p class="q-sub">Choose the city for this property analysis.</p>`;
-    h+=`<div class="jur-card ${ST.jurisdiction==="denver"?"sel":""}" onclick="ST.jurisdiction='denver';resetState(true);ST.pg=0;render()"><p class="jur-name">Denver</p><p class="jur-desc">Denver Zoning Code — Residential Care Types 1–4 (DZC Art. 11, §§ 11.2.8–11.2.12)</p></div>`;
-    h+=`<div class="jur-card ${ST.jurisdiction==="cos"?"sel":""}" onclick="ST.jurisdiction='cos';resetState(true);ST.pg=0;render()"><p class="jur-name">Colorado Springs</p><p class="jur-desc">Unified Development Code — Group Living / Human Services Establishment (UDC Ch. 7, § 7.3.301E)</p></div>`;
-    h+=`<div class="jur-card ${ST.jurisdiction==="epc"?"sel":""}" onclick="ST.jurisdiction='epc';resetState(true);ST.pg=0;render()"><p class="jur-name">El Paso County</p><p class="jur-desc">Land Development Code — Group Home / Institutional BH Pathways (LDC Ch. 5, § 5.2.17) · SP-05 enforcement policy active</p></div>`;
-    h+=`<div class="jur-card ${ST.jurisdiction==="manitou"?"sel":""}" onclick="ST.jurisdiction='manitou';resetState(true);ST.pg=0;render()"><p class="jur-name">Manitou Springs</p><p class="jur-desc">Land Use &amp; Development Code — Group Home, LTC, Medical &amp; Boarding Pathways (LUDC Title 18)</p></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="denver"?"sel":""}" role="button" tabindex="0" aria-label="Select Denver" onclick="ST.jurisdiction='denver';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">Denver</p><p class="jur-desc">Denver Zoning Code — Residential Care Types 1–4 (DZC Art. 11, §§ 11.2.8–11.2.12)</p></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="cos"?"sel":""}" role="button" tabindex="0" aria-label="Select Colorado Springs" onclick="ST.jurisdiction='cos';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">Colorado Springs</p><p class="jur-desc">Unified Development Code — Group Living / Human Services Establishment (UDC Ch. 7, § 7.3.301E)</p></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="epc"?"sel":""}" role="button" tabindex="0" aria-label="Select El Paso County" onclick="ST.jurisdiction='epc';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">El Paso County</p><p class="jur-desc">Land Development Code — Group Home / Institutional BH Pathways (LDC Ch. 5, § 5.2.17) · SP-05 enforcement policy active</p></div>`;
+    h+=`<div class="jur-card ${ST.jurisdiction==="manitou"?"sel":""}" role="button" tabindex="0" aria-label="Select Manitou Springs" onclick="ST.jurisdiction='manitou';resetState(true);ST.pg=0;render()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><p class="jur-name">Manitou Springs</p><p class="jur-desc">Land Use &amp; Development Code — Group Home, LTC, Medical &amp; Boarding Pathways (LUDC Title 18)</p></div>`;
     if(ST.jurisdiction){h+=`<div class="btn-row"><button class="btn-primary" onclick="advance()">Next</button></div>`}
     APP.innerHTML=h;return;
   }
@@ -144,7 +145,7 @@ function render(){
       h+=`<p class="q-title">Property address</p>`;
       h+=`<p class="q-sub">Enter a Denver address. The tool will query city data layers to auto-populate zone district, lot size, and RC facility counts.</p>`;
       if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped"){
-        h+=`<div class="addr-row"><input type="text" id="gis-addr" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 1680 Sherman St, 2901 Blake St" /><button class="btn-primary addr-btn" onclick="gisStartLookup()">Look up</button></div>`;
+        h+=`<div class="addr-row"><input type="text" id="gis-addr" class="addr-input" aria-label="Enter address for Denver GIS lookup" value="${esc(f.address||"")}" placeholder="e.g. 1680 Sherman St, 2901 Blake St" /><button class="btn-primary addr-btn" onclick="gisStartLookup()">Look up</button></div>`;
         if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip lookup — enter manually</button></div>`}
         else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped. You'll enter zone, lot size, and RC data manually in later steps.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('gis-addr').value||null;advance()">Next</button></div>`}
         else{h+=`<div class="field-help">Press "Look up" to query Denver's ArcGIS layers, or leave blank and click Next to enter all data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('gis-addr').value||null;setGisPhase('skipped');advance()">Skip — enter manually</button></div>`}
@@ -192,7 +193,7 @@ function render(){
       const autoSrc=ST.gisPhase==="done"&&ST.gisAutoZone&&ZL.includes(f.zone||"")&&!ST.gisOverrides.zone;
       h+=`<p class="q-title">Zone district</p><p class="q-sub">`;
       if(autoSrc)h+=`Auto-populated from ArcGIS. Confirm or change the zone district.`;else h+=`Select the zone district for this property.`;
-      h+=`</p><select class="zs" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
+      h+=`</p><select class="zs" aria-label="Select Denver zone district" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
       for(const[gn,gd] of Object.entries(ZG)){const zz=gd.p?ZL.filter(z=>z.startsWith(gd.p)):ZL.filter(z=>z==="MHC"||z==="O-1");if(!zz.length)continue;h+=`<optgroup label="${gn}">`;zz.forEach(z=>{h+=`<option value="${z}" ${f.zone===z?"selected":""}>${z}</option>`});h+=`</optgroup>`}
       h+=`</select>`;
       if(autoSrc)h+=`<div class="field-help" style="color:#4ADE80;">Source: Denver zoning layer (ODC_ZONE_ZONING_A) <span class="auto-badge api" style="vertical-align:middle;">API</span></div>`;
@@ -252,7 +253,7 @@ function render(){
       h+=`<p class="q-title">Property address</p>`;
       h+=`<p class="q-sub">Enter a Colorado Springs address. The tool will query COS ArcGIS and CDPHE layers to auto-populate zone, overlays, lot size, and nearby facilities.</p>`;
       if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped"){
-        h+=`<div class="addr-row"><input type="text" id="cos-addr" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 1215 N Nevada Ave, 955 E Colorado Ave" /><button class="btn-primary addr-btn" onclick="cosGisStart()">Look up</button></div>`;
+        h+=`<div class="addr-row"><input type="text" id="cos-addr" class="addr-input" aria-label="Enter address for Colorado Springs GIS lookup" value="${esc(f.address||"")}" placeholder="e.g. 1215 N Nevada Ave, 955 E Colorado Ave" /><button class="btn-primary addr-btn" onclick="cosGisStart()">Look up</button></div>`;
         if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip — enter manually</button></div>`}
         else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('cos-addr')?.value||null;advance()">Next</button></div>`}
         else{h+=`<div class="field-help">Press "Look up" to query Colorado Springs GIS layers, or skip to enter data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('cos-addr')?.value||null;setGisPhase('skipped');advance()">Skip — enter manually</button></div>`}
@@ -293,7 +294,7 @@ function render(){
       const autoSrc=ST.gisPhase==="done"&&ST.gisAutoZone&&COS_ZL.includes(f.zone||"")&&!ST.gisOverrides.zone;
       h+=`<p class="q-title">Zone district</p><p class="q-sub">`;
       if(autoSrc)h+=`Auto-populated from ArcGIS. Confirm or change.`;else h+=`Select the zone district.`;
-      h+=`</p><select class="zs" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
+      h+=`</p><select class="zs" aria-label="Select Colorado Springs zone district" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
       for(const[gn,gd] of Object.entries(COS_ZG)){h+=`<optgroup label="${gn}">`;gd.list.forEach(z=>{h+=`<option value="${z}" ${f.zone===z?"selected":""}>${z}</option>`});h+=`</optgroup>`}
       h+=`</select>`;
       if(autoSrc)h+=`<div class="field-help" style="color:#4ADE80;">Source: COS zoning layer <span class="auto-badge api" style="vertical-align:middle;">API</span></div>`;
@@ -352,7 +353,7 @@ function render(){
       h+=`<p class="q-title">Property address</p>`;
       h+=`<p class="q-sub">Enter an El Paso County (unincorporated) address. The tool will query county zoning and parcel layers to auto-populate zone district and lot size.</p>`;
       if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped"){
-        h+=`<div class="addr-row"><input type="text" id="epc-addr" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 7250 Campus Dr, 11525 Ridgeline Dr" /><button class="btn-primary addr-btn" onclick="epcGisStart()">Look up</button></div>`;
+        h+=`<div class="addr-row"><input type="text" id="epc-addr" class="addr-input" aria-label="Enter address for El Paso County GIS lookup" value="${esc(f.address||"")}" placeholder="e.g. 7250 Campus Dr, 11525 Ridgeline Dr" /><button class="btn-primary addr-btn" onclick="epcGisStart()">Look up</button></div>`;
         if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip — enter manually</button></div>`}
         else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('epc-addr')?.value||null;advance()">Next</button></div>`}
         else{h+=`<div class="field-help">Press "Look up" to query EPC zoning and parcel layers, or skip to enter manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('epc-addr')?.value||null;setGisPhase('skipped');advance()">Skip — enter manually</button></div>`}
@@ -425,7 +426,7 @@ function render(){
       const autoSrc=ST.gisPhase==="done"&&ST.gisAutoZone&&EPC_ZL.includes(f.zone||"")&&!ST.gisOverrides.zone;
       h+=`<p class="q-title">Zone district</p><p class="q-sub">`;
       if(autoSrc)h+=`Auto-populated from EPC zoning layer. Confirm or change.`;else h+=`Select the zone district for this property.`;
-      h+=`</p><select class="zs" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
+      h+=`</p><select class="zs" aria-label="Select El Paso County zone district" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
       for(const[gn,gd] of Object.entries(EPC_ZG)){h+=`<optgroup label="${gn}">`;gd.list.forEach(z=>{h+=`<option value="${z}" ${f.zone===z?"selected":""}>${z}</option>`});h+=`</optgroup>`}
       h+=`</select>`;
       if(autoSrc)h+=`<div class="field-help" style="color:#4ADE80;">Source: EPC ZoningAreas layer <span class="auto-badge api" style="vertical-align:middle;">API</span></div>`;
@@ -464,7 +465,7 @@ function render(){
       h+=`<p class="q-title">Property address</p>`;
       h+=`<p class="q-sub">Enter a Manitou Springs address. The tool will query county assessor records, FEMA flood maps, and historic district data to auto-populate zone, building details, and site characteristics.</p>`;
       if(ST.gisPhase==="idle"||ST.gisPhase==="error"||ST.gisPhase==="skipped"){
-        h+=`<div class="addr-row"><input type="text" id="manAddrInput" class="addr-input" value="${esc(f.address||"")}" placeholder="e.g. 606 Manitou Ave, 10 Old Man's Trail" /><button class="btn-primary addr-btn" onclick="manGisStart()">Look up</button></div>`;
+        h+=`<div class="addr-row"><input type="text" id="manAddrInput" class="addr-input" aria-label="Enter address for Manitou Springs GIS lookup" value="${esc(f.address||"")}" placeholder="e.g. 606 Manitou Ave, 10 Old Man's Trail" /><button class="btn-primary addr-btn" onclick="manGisStart()">Look up</button></div>`;
         if(ST.gisPhase==="error"){h+=`<div class="lookup-error">${esc(ST.gisError)}</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="gisSkip()">Skip — enter manually</button></div>`}
         else if(ST.gisPhase==="skipped"){h+=`<div style="margin-top:12px;font-size:13px;color:#9B9BA7;">Lookup skipped.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="ST.form.address=document.getElementById('manAddrInput')?.value||null;advance()">Next</button></div>`}
         else{h+=`<div class="field-help">Press "Look up" to geocode, or skip to enter all data manually.</div>`;h+=`<div class="btn-row">${bk}<button class="btn-secondary" onclick="ST.form.address=document.getElementById('manAddrInput')?.value||null;setGisPhase('skipped');advance()">Skip — enter manually</button></div>`}
@@ -511,7 +512,7 @@ function render(){
       const autoSrc=ST.gisPhase==="done"&&ST.manAutoZone&&MAN_ZL.includes(f.zone||"");
       h+=`<p class="q-title">Zone district</p><p class="q-sub">`;
       if(autoSrc)h+=`Auto-populated from assessor records. Confirm or change.`;else h+=`Select the zone district for this property.`;
-      h+=`</p><select class="zs" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
+      h+=`</p><select class="zs" aria-label="Select Manitou Springs zone district" onchange="ST.form.zone=this.value||null;ST.pg=${pg};render()"><option value="">— Select —</option>`;
       for(const[gn,gd] of Object.entries(MAN_ZG)){h+=`<optgroup label="${gn}">`;gd.list.forEach(z=>{h+=`<option value="${z}" ${f.zone===z?"selected":""}>${z}</option>`});h+=`</optgroup>`}
       h+=`</select>`;
       if(autoSrc)h+=`<div class="field-help" style="color:#4ADE80;">Source: El Paso County Assessor (Spatialest) <span class="auto-badge api" style="vertical-align:middle;">API</span></div>`;
@@ -572,6 +573,7 @@ function render(){
   }
 
   APP.innerHTML=h;
+  if(pg!==_prevPg){_prevPg=pg;requestAnimationFrame(()=>{const el=APP.querySelector(".q-title, .addr-input, select.zs");if(el){el.setAttribute("tabindex","-1");el.focus({preventScroll:true})}})}
 }
 
 /* ── Review Facts Helper ──────────────────────────────────────── */
@@ -670,77 +672,81 @@ function renderRes(){
   const _vd=ENGINE_VERIFIED[ST.jurisdiction];if(_vd){const _ds=Math.floor((Date.now()-new Date(_vd).getTime())/864e5);if(_ds>90)h+=`<div style="background:#2E2410;border:1px solid #5A4A20;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:12px;color:#FBBF24;">&#9888; Engine rules last verified ${_ds} days ago (${_vd}). Code changes may have occurred. Review before relying on results.</div>`}
   if(R.p2==="fail"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem;"><p style="font-size:14px;font-weight:500;color:#F09595;margin:0 0 4px;">All pathways blocked</p><p style="font-size:13px;color:#D87070;margin:0;">${R.gS.map(s=>esc(s.msg)+" "+citeLink(s.cite)).join("; ")}</p></div><div class="btn-row" style="margin-bottom:1.5rem;"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.results=null;ST.pg=0;render()">Back to inputs</button></div>`;h+=rFacts();APP.innerHTML=h;return}
   h+=`<div class="summary-row"><div class="stat-card"><p class="stat-label">Viable pathways</p><p class="stat-val green">${vi.length}</p></div><div class="stat-card"><p class="stat-label">Highest viable count</p><p class="stat-val">${bL}</p></div><div class="stat-card"><p class="stat-label">Open caveats</p><p class="stat-val ${blk>0?"amber":""}">${allC.length}${blk?" ("+blk+" blocking)":""}</p></div></div>`;
-  h+=`<div class="tab-row"><button class="tab-btn ${ST.activeTab==="dashboard"?"active":""}" onclick="ST.activeTab='dashboard';render()">Pathways</button><button class="tab-btn ${ST.activeTab==="caveats"?"active":""}" onclick="ST.activeTab='caveats';render()">Caveats (${allC.length})</button><button class="tab-btn ${ST.activeTab==="costs"?"active":""}" onclick="ST.activeTab='costs';render()">Costs</button><button class="tab-btn ${ST.activeTab==="checklist"?"active":""}" onclick="ST.activeTab='checklist';render()">Checklist</button><button class="tab-btn ${ST.activeTab==="facts"?"active":""}" onclick="ST.activeTab='facts';render()">Site facts</button></div>`;
-  if(ST.activeTab==="dashboard"){
-    // EPC: show infrastructure card above pathways
-    if(ST.jurisdiction==="epc"&&ST.epcInfraStatus){
-      const isDistrict=ST.epcInfraStatus==="district";
-      const isWell=ST.epcInfraStatus==="well-septic";
-      const borderColor=isDistrict?"#1A3D28":isWell?"#5A4A20":"#2A2A3A";
-      const bgColor=isDistrict?"#0E1E14":isWell?"#2E2410":"#151520";
-      const iconColor=isDistrict?"#4ADE80":isWell?"#FBBF24":"#9B9BA7";
-      const icon=isDistrict?"&#10003;":isWell?"&#9888;":"&#8263;";
-      const label=isDistrict?"District Water &amp; Sewer":isWell?"Private Well &amp; Septic":"Water &amp; Sewer: Unknown";
-      const detail=isDistrict?(ST.epcInfraDistrict||"District-served"):isWell?"Property is on private well and septic system. Infrastructure capacity constraints apply — see water/wastewater analysis.":"Could not auto-determine infrastructure type. Verify with El Paso County Assessor or call the property's utility district directly.";
-      h+=`<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:12px 16px;margin-bottom:1.25rem;display:flex;align-items:flex-start;gap:10px;">`;
-      h+=`<span style="font-size:16px;color:${iconColor};flex-shrink:0;margin-top:1px;">${icon}</span>`;
-      h+=`<div><div style="font-size:13px;font-weight:500;color:${iconColor};margin-bottom:2px;">${label}</div>`;
-      h+=`<div style="font-size:12px;color:#9B9BA7;line-height:1.5;">${esc(detail)}</div>`;
-      if(isWell)h+=`<div style="font-size:11px;color:#555568;margin-top:4px;">Water supply and OWTS capacity may limit max bed count independent of zoning approval. Run water/wastewater analysis for this address.</div>`;
-      h+=`</div></div>`;
-    }
-    if(!vi.length&&!nv.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No pathways returned by engine.</p>`;
-    else{if(vi.length)h+=`<p class="section-label">Viable</p>`+vi.map(pwC).join("");if(nv.length)h+=`<p class="section-label">Not Viable</p>`+nv.map(pwC).join("")}}
-  else if(ST.activeTab==="caveats"){if(!allC.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No open caveats on viable pathways.</p>`;else allC.forEach(c=>{h+=`<div class="caveat-card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span>${citeLink(c.cite)}</div><p class="caveat-title">${esc(c.msg)}</p><p class="caveat-meta"><strong>Affects:</strong> ${c.paths.map(esc).join(", ")}</p>${c.resolve?`<p class="caveat-meta"><strong>Resolve:</strong> ${esc(c.resolve)}</p>`:""}</div>`})}
-  else if(ST.activeTab==="costs"){
-    h+=`<p class="section-label">Cost Estimates by Viable Pathway</p>`;
-    if(!viCo.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No viable or conditional pathways.</p>`;
-    else{
-      viCo.forEach(r=>{
-        h+=`<div style="background:#151520;border:1px solid #2A2A3A;border-radius:10px;padding:14px 16px;margin-bottom:10px;">`;
-        h+=`<div style="font-size:14px;font-weight:500;color:#E8E8EC;margin-bottom:8px;">${esc(r.nm)}</div>`;
-        h+=`<table style="width:100%;border-collapse:collapse;font-size:12px;">`;
-        // Extract fee from rsk if available
-        const fee=r.rsk.fee;
-        if(fee){
-          h+=`<tr><td style="padding:4px 0;color:#9B9BA7;">Application fee</td><td style="padding:4px 0;text-align:right;color:#E8E8EC;">${fee}</td></tr>`;
-        }
-        // Timeline from rsk
-        const tl=r.rsk.timeline;
-        if(tl){
-          h+=`<tr><td style="padding:4px 0;color:#9B9BA7;">Estimated timeline</td><td style="padding:4px 0;text-align:right;color:#E8E8EC;">${tl}</td></tr>`;
-        }
-        h+=`</table></div>`;
-      });
-      h+=`<p class="section-label" style="margin-top:16px;">Ancillary Costs (may apply)</p>`;
+  h+=`<div class="tab-row" role="tablist" aria-label="Results tabs"><button class="tab-btn ${ST.activeTab==="dashboard"?"active":""}" role="tab" aria-selected="${ST.activeTab==="dashboard"}" aria-controls="panel-pathways" onclick="ST.activeTab='dashboard';render()">Pathways</button><button class="tab-btn ${ST.activeTab==="caveats"?"active":""}" role="tab" aria-selected="${ST.activeTab==="caveats"}" aria-controls="panel-caveats" onclick="ST.activeTab='caveats';render()">Caveats (${allC.length})</button><button class="tab-btn ${ST.activeTab==="costs"?"active":""}" role="tab" aria-selected="${ST.activeTab==="costs"}" aria-controls="panel-costs" onclick="ST.activeTab='costs';render()">Costs</button><button class="tab-btn ${ST.activeTab==="checklist"?"active":""}" role="tab" aria-selected="${ST.activeTab==="checklist"}" aria-controls="panel-checklist" onclick="ST.activeTab='checklist';render()">Checklist</button><button class="tab-btn ${ST.activeTab==="facts"?"active":""}" role="tab" aria-selected="${ST.activeTab==="facts"}" aria-controls="panel-facts" onclick="ST.activeTab='facts';render()">Site facts</button></div>`;
+  // All tab panels always rendered; CSS hides inactive on screen, shows all for print
+  h+=`<div class="tab-panel${ST.activeTab==="dashboard"?" active":""}" data-tab="Pathways" role="tabpanel" id="panel-pathways">`;
+  // EPC: show infrastructure card above pathways
+  if(ST.jurisdiction==="epc"&&ST.epcInfraStatus){
+    const isDistrict=ST.epcInfraStatus==="district";
+    const isWell=ST.epcInfraStatus==="well-septic";
+    const borderColor=isDistrict?"#1A3D28":isWell?"#5A4A20":"#2A2A3A";
+    const bgColor=isDistrict?"#0E1E14":isWell?"#2E2410":"#151520";
+    const iconColor=isDistrict?"#4ADE80":isWell?"#FBBF24":"#9B9BA7";
+    const icon=isDistrict?"&#10003;":isWell?"&#9888;":"&#8263;";
+    const label=isDistrict?"District Water &amp; Sewer":isWell?"Private Well &amp; Septic":"Water &amp; Sewer: Unknown";
+    const detail=isDistrict?(ST.epcInfraDistrict||"District-served"):isWell?"Property is on private well and septic system. Infrastructure capacity constraints apply — see water/wastewater analysis.":"Could not auto-determine infrastructure type. Verify with El Paso County Assessor or call the property's utility district directly.";
+    h+=`<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:12px 16px;margin-bottom:1.25rem;display:flex;align-items:flex-start;gap:10px;">`;
+    h+=`<span style="font-size:16px;color:${iconColor};flex-shrink:0;margin-top:1px;">${icon}</span>`;
+    h+=`<div><div style="font-size:13px;font-weight:500;color:${iconColor};margin-bottom:2px;">${label}</div>`;
+    h+=`<div style="font-size:12px;color:#9B9BA7;line-height:1.5;">${esc(detail)}</div>`;
+    if(isWell)h+=`<div style="font-size:11px;color:#555568;margin-top:4px;">Water supply and OWTS capacity may limit max bed count independent of zoning approval. Run water/wastewater analysis for this address.</div>`;
+    h+=`</div></div>`;
+  }
+  if(!vi.length&&!nv.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No pathways returned by engine.</p>`;
+  else{if(vi.length)h+=`<p class="section-label">Viable</p>`+vi.map(pwC).join("");if(nv.length)h+=`<p class="section-label">Not Viable</p>`+nv.map(pwC).join("")}
+  h+=`</div>`;
+  h+=`<div class="tab-panel${ST.activeTab==="caveats"?" active":""}" data-tab="Caveats" role="tabpanel" id="panel-caveats">`;
+  if(!allC.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No open caveats on viable pathways.</p>`;else allC.forEach(c=>{h+=`<div class="caveat-card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="stop-pill ${c.blocking?"stop-hard":"stop-caveat"}">${c.blocking?"Blocking":"Info"}</span>${citeLink(c.cite)}</div><p class="caveat-title">${esc(c.msg)}</p><p class="caveat-meta"><strong>Affects:</strong> ${c.paths.map(esc).join(", ")}</p>${c.resolve?`<p class="caveat-meta"><strong>Resolve:</strong> ${esc(c.resolve)}</p>`:""}</div>`});
+  h+=`</div>`;
+  h+=`<div class="tab-panel${ST.activeTab==="costs"?" active":""}" data-tab="Costs" role="tabpanel" id="panel-costs">`;
+  h+=`<p class="section-label">Cost Estimates by Viable Pathway</p>`;
+  if(!viCo.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No viable or conditional pathways.</p>`;
+  else{
+    viCo.forEach(r=>{
+      h+=`<div style="background:#151520;border:1px solid #2A2A3A;border-radius:10px;padding:14px 16px;margin-bottom:10px;">`;
+      h+=`<div style="font-size:14px;font-weight:500;color:#E8E8EC;margin-bottom:8px;">${esc(r.nm)}</div>`;
       h+=`<table style="width:100%;border-collapse:collapse;font-size:12px;">`;
-      Object.values(ANCILLARY_COSTS).forEach(c=>{
-        h+=`<tr style="border-bottom:1px solid #1E1E2E;"><td style="padding:8px 0;color:#9B9BA7;">${c.label}</td><td style="padding:8px 0;text-align:right;color:#E8E8EC;white-space:nowrap;">$${c.min.toLocaleString()} – $${c.max.toLocaleString()}</td></tr>`;
-      });
-      h+=`</table>`;
-      h+=`<div style="margin-top:12px;font-size:11px;color:#555568;line-height:1.5;">Estimates are approximate ranges based on published fee schedules and typical professional service costs. Actual costs vary by project scope, site conditions, and jurisdiction requirements. Always confirm current fees with the applicable planning department.</div>`;
-    }
+      const fee=r.rsk.fee;
+      if(fee){
+        h+=`<tr><td style="padding:4px 0;color:#9B9BA7;">Application fee</td><td style="padding:4px 0;text-align:right;color:#E8E8EC;">${fee}</td></tr>`;
+      }
+      const tl=r.rsk.timeline;
+      if(tl){
+        h+=`<tr><td style="padding:4px 0;color:#9B9BA7;">Estimated timeline</td><td style="padding:4px 0;text-align:right;color:#E8E8EC;">${tl}</td></tr>`;
+      }
+      h+=`</table></div>`;
+    });
+    h+=`<p class="section-label" style="margin-top:16px;">Ancillary Costs (may apply)</p>`;
+    h+=`<table style="width:100%;border-collapse:collapse;font-size:12px;">`;
+    Object.values(ANCILLARY_COSTS).forEach(c=>{
+      h+=`<tr style="border-bottom:1px solid #1E1E2E;"><td style="padding:8px 0;color:#9B9BA7;">${c.label}</td><td style="padding:8px 0;text-align:right;color:#E8E8EC;white-space:nowrap;">$${c.min.toLocaleString()} – $${c.max.toLocaleString()}</td></tr>`;
+    });
+    h+=`</table>`;
+    h+=`<div style="margin-top:12px;font-size:11px;color:#555568;line-height:1.5;">Estimates are approximate ranges based on published fee schedules and typical professional service costs. Actual costs vary by project scope, site conditions, and jurisdiction requirements. Always confirm current fees with the applicable planning department.</div>`;
   }
-  else if(ST.activeTab==="checklist"){
-    h+=`<p class="section-label">Application Checklist by Viable Pathway</p>`;
-    if(!viCo.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No viable or conditional pathways.</p>`;
-    else{
-      viCo.forEach(r=>{
-        const docs=getPathwayDocs(r);
-        h+=`<div style="background:#151520;border:1px solid #2A2A3A;border-radius:10px;padding:14px 16px;margin-bottom:10px;">`;
-        h+=`<div style="font-size:14px;font-weight:500;color:#E8E8EC;margin-bottom:8px;">${esc(r.nm)} <span style="font-size:11px;color:#6B6B78;">(${r.proc})</span></div>`;
-        docs.forEach((d,i)=>{
-          const ck=ST.checklistState[r.id+"_"+i]||false;
-          h+=`<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;padding:4px 0;cursor:pointer;color:${ck?"#555568":"#E8E8EC"};${ck?"text-decoration:line-through":""};">`;
-          h+=`<input type="checkbox" ${ck?"checked":""} onchange="ST.checklistState['${r.id}_${i}']=this.checked;render()" style="margin-top:2px;">`;
-          h+=`<span>${d.name}${d.required?"":" <em style='color:#6B6B78;'>(if applicable)</em>"}</span></label>`;
-        });
-        h+=`</div>`;
+  h+=`</div>`;
+  h+=`<div class="tab-panel${ST.activeTab==="checklist"?" active":""}" data-tab="Checklist" role="tabpanel" id="panel-checklist">`;
+  h+=`<p class="section-label">Application Checklist by Viable Pathway</p>`;
+  if(!viCo.length)h+=`<p style="font-size:13px;color:#9B9BA7;padding:1rem 0;">No viable or conditional pathways.</p>`;
+  else{
+    viCo.forEach(r=>{
+      const docs=getPathwayDocs(r);
+      h+=`<div style="background:#151520;border:1px solid #2A2A3A;border-radius:10px;padding:14px 16px;margin-bottom:10px;">`;
+      h+=`<div style="font-size:14px;font-weight:500;color:#E8E8EC;margin-bottom:8px;">${esc(r.nm)} <span style="font-size:11px;color:#6B6B78;">(${r.proc})</span></div>`;
+      docs.forEach((d,i)=>{
+        const ck=ST.checklistState[r.id+"_"+i]||false;
+        h+=`<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;padding:4px 0;cursor:pointer;color:${ck?"#555568":"#E8E8EC"};${ck?"text-decoration:line-through":""};">`;
+        h+=`<input type="checkbox" ${ck?"checked":""} onchange="ST.checklistState['${r.id}_${i}']=this.checked;render()" style="margin-top:2px;">`;
+        h+=`<span>${d.name}${d.required?"":" <em style='color:#6B6B78;'>(if applicable)</em>"}</span></label>`;
       });
-      h+=`<div style="margin-top:12px;font-size:11px;color:#555568;line-height:1.5;">Checklist items are based on standard submittal requirements. Specific jurisdictions may require additional documents. Confirm with the applicable planning department before filing.</div>`;
-    }
+      h+=`</div>`;
+    });
+    h+=`<div style="margin-top:12px;font-size:11px;color:#555568;line-height:1.5;">Checklist items are based on standard submittal requirements. Specific jurisdictions may require additional documents. Confirm with the applicable planning department before filing.</div>`;
   }
-  else if(ST.activeTab==="facts")h+=rFacts();
+  h+=`</div>`;
+  h+=`<div class="tab-panel${ST.activeTab==="facts"?" active":""}" data-tab="Site Facts" role="tabpanel" id="panel-facts">`;
+  h+=rFacts();
+  h+=`</div>`;
   APP.innerHTML=h;document.querySelectorAll(".pw-card-head").forEach(el=>{el.onclick=()=>{const id=el.getAttribute("data-id");ST.expanded[id]=!ST.expanded[id];el.nextElementSibling.classList.toggle("open");el.querySelector(".pw-arrow").classList.toggle("open")}});
 }
 

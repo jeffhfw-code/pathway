@@ -3,6 +3,14 @@
    Dependencies: config.js (endpoints), state.js (ST, setGisPhase)
    ═══════════════════════════════════════════════════════════════════ */
 
+/* ── AbortController for race condition prevention ─────────── */
+let _gisAbort=null;
+function gisNewAbort(){
+  if(_gisAbort)_gisAbort.abort();
+  _gisAbort=new AbortController();
+  return _gisAbort.signal;
+}
+
 /* ── Shared: Escape single quotes for ArcGIS WHERE clauses ───── */
 function gisSqlEsc(s){return s.replace(/'/g,"''")}
 
@@ -17,17 +25,19 @@ function gisHav(a1,o1,a2,o2){
 async function gisUnifiedStart(inputId,findFn,runFn,errorContext){
   const raw=document.getElementById(inputId).value.trim();
   if(!raw)return;
+  const signal=gisNewAbort();
   ST.form.address=raw;setGisPhase("searching");ST.gisError=null;render();
   try{
-    const candidates=await findFn(raw);
+    const candidates=await findFn(raw,signal);
     if(candidates.length===0){
       setGisPhase("error");
       ST.gisError="No matching address found in "+errorContext+". Check spelling or include the directional (N/S/E/W).";
       render();return;
     }
-    if(candidates.length===1){await runFn(candidates[0])}
+    if(candidates.length===1){await runFn(candidates[0],signal)}
     else{setGisPhase("disambig");ST.gisAddresses=candidates;render()}
   }catch(err){
+    if(err.name==="AbortError")return;
     setGisPhase("error");
     ST.gisError="ArcGIS query failed: "+(err.message||err)+". You can skip the lookup and enter data manually.";
     render();
@@ -35,9 +45,11 @@ async function gisUnifiedStart(inputId,findFn,runFn,errorContext){
 }
 
 async function gisUnifiedSelect(idx,runFn){
+  const signal=gisNewAbort();
   setGisPhase("querying");render();
-  try{await runFn(ST.gisAddresses[idx])}
+  try{await runFn(ST.gisAddresses[idx],signal)}
   catch(err){
+    if(err.name==="AbortError")return;
     setGisPhase("error");
     ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";
     render();
@@ -59,7 +71,7 @@ function gisNormalize(raw){
   return parts.join(" ");
 }
 
-async function gisFindAddresses(raw){
+async function gisFindAddresses(raw,signal){
   const norm=gisNormalize(raw);
   const safe=gisSqlEsc(norm);
   const queries=[`FULL_ADDRESS='${safe}'`,`FULL_ADDRESS LIKE '${safe}%'`];
@@ -67,7 +79,7 @@ async function gisFindAddresses(raw){
   if(m){const num=m[1];const street=gisSqlEsc(m[2].replace(/^[NSEW]\s+/,""));queries.push(`ADDRESS_NUMBER=${num} AND STREET_NAME LIKE '${street}%'`)}
   for(const where of queries){
     const url=`${ADDR_LAYER}?where=${encodeURIComponent(where)}&outFields=FULL_ADDRESS,LATITUDE,LONGITUDE&returnGeometry=false&resultRecordCount=10&f=json`;
-    const res=await fetch(url);if(!res.ok)continue;const data=await res.json();
+    const res=await fetch(url,{signal});if(!res.ok)continue;const data=await res.json();
     const feats=(data.features||[]).map(f=>f.attributes);
     if(feats.length>0){
       if(feats.length===1)return feats;
@@ -79,12 +91,12 @@ async function gisFindAddresses(raw){
   return[];
 }
 
-async function gisQueryLayers(lat,lon){
+async function gisQueryLayers(lat,lon,signal){
   const geom=`${lon}%2C${lat}`;
   const[parcelRes,zoningRes,rcRes]=await Promise.all([
-    fetch(`${PARCEL_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=SITUS_ADDRESS_LINE1,LAND_AREA,ZONE_10,ZONE_ID,D_CLASS_CN,PROP_CLASS,OWNER_NAME,APPRAISED_TOTAL_VALUE,LEGAL_DESC,Shape__Area,SALE_DATE,SALE_PRICE,RES_ORIG_YEAR_BUILT,COM_ORIG_YEAR_BUILT,TOT_UNITS&returnGeometry=false&f=json`),
-    fetch(`${ZONING_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=ZONE_DISTRICT,ZONE_DESCRIPTION,ZONE_USE_FORM,NBHD_CONTEXT,ZONE_DIST_TYPE&returnGeometry=false&f=json`),
-    fetch(`${RC_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=FACILITY_NAME,FACILITY_ADDRESS,RES_CARE_TYPE&returnGeometry=true&outSR=4326&f=json`)
+    fetch(`${PARCEL_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=SITUS_ADDRESS_LINE1,LAND_AREA,ZONE_10,ZONE_ID,D_CLASS_CN,PROP_CLASS,OWNER_NAME,APPRAISED_TOTAL_VALUE,LEGAL_DESC,Shape__Area,SALE_DATE,SALE_PRICE,RES_ORIG_YEAR_BUILT,COM_ORIG_YEAR_BUILT,TOT_UNITS&returnGeometry=false&f=json`,{signal}),
+    fetch(`${ZONING_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=ZONE_DISTRICT,ZONE_DESCRIPTION,ZONE_USE_FORM,NBHD_CONTEXT,ZONE_DIST_TYPE&returnGeometry=false&f=json`,{signal}),
+    fetch(`${RC_LAYER}?geometry=${geom}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=FACILITY_NAME,FACILITY_ADDRESS,RES_CARE_TYPE&returnGeometry=true&outSR=4326&f=json`,{signal})
   ]);
   const parcelData=await parcelRes.json();const zoningData=await zoningRes.json();const rcData=await rcRes.json();
   let parcel=null;const parcelCount=parcelData.features?.length||0;
@@ -97,11 +109,11 @@ async function gisQueryLayers(lat,lon){
   return{parcel,parcelCount,zoning:zoningData.features?.length?zoningData.features[0].attributes:null,facilities};
 }
 
-async function gisRunWithAddress(addr){
+async function gisRunWithAddress(addr,signal){
   setGisPhase("querying");render();
   const lat=addr.LATITUDE,lon=addr.LONGITUDE;
   try{
-    const data=await gisQueryLayers(lat,lon);
+    const data=await gisQueryLayers(lat,lon,signal);
     const z=data.zoning;const p=data.parcel;
     const zoningZone=z?z.ZONE_DISTRICT:null;const landArea=p?p.LAND_AREA:null;
     const totalRC=data.facilities.length;
@@ -139,7 +151,7 @@ function cosNormalize(raw){
   return s.split(/\s+/).map(p=>abbrs[p]||p).join(" ");
 }
 
-async function cosFindAddresses(raw){
+async function cosFindAddresses(raw,signal){
   const norm=cosNormalize(raw);
   const safe=gisSqlEsc(norm);
   const queries=[`FullAddress='${safe}'`,`FullAddress LIKE '${safe}%'`];
@@ -147,7 +159,7 @@ async function cosFindAddresses(raw){
   if(m){queries.push(`Add_Number=${m[1]} AND FullAddress LIKE '%${gisSqlEsc(m[3])}%'`)}
   for(const where of queries){
     const url=`${COS_ADDR}?where=${encodeURIComponent(where)}&outFields=FullAddress,Add_Number&returnGeometry=true&outSR=4326&resultRecordCount=10&f=json`;
-    const res=await fetch(url);if(!res.ok)continue;const data=await res.json();
+    const res=await fetch(url,{signal});if(!res.ok)continue;const data=await res.json();
     const feats=(data.features||[]).map(f=>({...f.attributes,x:f.geometry.x,y:f.geometry.y}));
     if(feats.length>0){
       const bases=new Map();
@@ -158,19 +170,19 @@ async function cosFindAddresses(raw){
   return[];
 }
 
-async function cosQueryLayers(lat,lon){
+async function cosQueryLayers(lat,lon,signal){
   const geom=`${lon},${lat}`;
   const gP=`geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&f=json`;
   const coreFetches=[
-    fetch(`${COS_PARCEL}?${gP}&outFields=PARCEL,ZONING,MAINADDRES,OwnerName,ACREAGE,LEGAL,Shape_Area,CITY,type`).then(r=>r.json()),
-    fetch(`${COS_ZONING}?${gP}&outFields=LABEL,DESCRIPT,ECP_Zoning_Code,ECP_Zone_Description`).then(r=>r.json()),
+    fetch(`${COS_PARCEL}?${gP}&outFields=PARCEL,ZONING,MAINADDRES,OwnerName,ACREAGE,LEGAL,Shape_Area,CITY,type`,{signal}).then(r=>r.json()),
+    fetch(`${COS_ZONING}?${gP}&outFields=LABEL,DESCRIPT,ECP_Zoning_Code,ECP_Zone_Description`,{signal}).then(r=>r.json()),
   ];
   const overlayFetches=Object.entries(COS_OVERLAYS).map(([key,layer])=>
-    fetch(`${layer.url}?${gP}&outFields=${layer.fields}`).then(r=>r.json()).then(d=>({key,features:d.features||[]})).catch(()=>({key,features:[]}))
+    fetch(`${layer.url}?${gP}&outFields=${layer.fields}`,{signal}).then(r=>r.json()).then(d=>({key,features:d.features||[]})).catch(e=>{if(e.name==="AbortError")throw e;return{key,features:[]}})
   );
-  const cdpheFetch=fetch(`${CDPHE}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=Facility_Name,Facility_Type,Facility_Type_Detail,Address_Full,Licensed_Beds_Total,Operating_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&resultRecordCount=200&f=json`).then(r=>r.json()).catch(()=>({features:[]}));
-  const cupFetch=fetch(`${COS_CUP}?${gP}&outFields=FILE_NUM`).then(r=>r.json()).catch(()=>({features:[]}));
-  const uvFetch=fetch(`${COS_USEVAR}?${gP}&outFields=FILE_NUM`).then(r=>r.json()).catch(()=>({features:[]}));
+  const cdpheFetch=fetch(`${CDPHE}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=Facility_Name,Facility_Type,Facility_Type_Detail,Address_Full,Licensed_Beds_Total,Operating_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&resultRecordCount=200&f=json`,{signal}).then(r=>r.json()).catch(e=>{if(e.name==="AbortError")throw e;return{features:[]}});
+  const cupFetch=fetch(`${COS_CUP}?${gP}&outFields=FILE_NUM`,{signal}).then(r=>r.json()).catch(e=>{if(e.name==="AbortError")throw e;return{features:[]}});
+  const uvFetch=fetch(`${COS_USEVAR}?${gP}&outFields=FILE_NUM`,{signal}).then(r=>r.json()).catch(e=>{if(e.name==="AbortError")throw e;return{features:[]}});
   const[parcelRes,zoningRes,...rest]=await Promise.all([...coreFetches,...overlayFetches,cdpheFetch,cupFetch,uvFetch]);
   const oLen=Object.keys(COS_OVERLAYS).length;
   const overlayResults=rest.slice(0,oLen);
@@ -205,11 +217,11 @@ async function cosQueryLayers(lat,lon){
   return{parcel,parcelCount,zoning,effectiveZone,zoningLabel:zoning?zoning.LABEL:null,zoningDesc:zoning?(zoning.ECP_Zone_Description||zoning.DESCRIPT):null,lotSqFt,activeOverlays,nnaSector,apzType,facilities,cupFiles,uvFiles,alrCount:facilities.filter(f=>f.type==="Assisted Living Residence").length};
 }
 
-async function cosGisRun(addr){
+async function cosGisRun(addr,signal){
   setGisPhase("querying");render();
   const lat=addr.y,lon=addr.x;
   try{
-    const data=await cosQueryLayers(lat,lon);
+    const data=await cosQueryLayers(lat,lon,signal);
     ST.gisData={...data,matchedAddr:addr.FullAddress,lat,lon};
     ST.gisAutoZone=data.effectiveZone;
     ST.gisAutoLot=data.lotSqFt;
@@ -248,27 +260,27 @@ function cosGisApply(){
 /* ═══════════════════════════════════════════════════════════════════
    EL PASO COUNTY GIS
    ═══════════════════════════════════════════════════════════════════ */
-async function epcFindCandidates(raw){
+async function epcFindCandidates(raw,signal){
   const q=encodeURIComponent(raw.replace(/,?\s*(el\s*paso\s*county|CO|Colorado|\d{5}(-\d{4})?)[\s,]*/gi," ").trim());
   const gUrl=`${EPC_GEOCODE}?SingleLine=${q}&searchExtent=${EPC_BBOX}&outFields=Addr_type,Match_addr,StAddr&maxLocations=5&f=json`;
-  const gRes=await fetch(gUrl);if(!gRes.ok)return[];const gData=await gRes.json();
+  const gRes=await fetch(gUrl,{signal});if(!gRes.ok)return[];const gData=await gRes.json();
   const candidates=(gData.candidates||[]).filter(c=>c.score>=80);
   // Transform to unified format for disambiguation
   return candidates;
 }
 
-async function epcGisRun(candidate){
+async function epcGisRun(candidate,signal){
   setGisPhase("querying");render();
   const lon=candidate.location.x,lat=candidate.location.y;
   const geom=`${lon},${lat}`;
   const gP=`geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&f=json`;
   try{
     const[zoningRes,parcelRes,overlayRes,cityRes,cdpheRes]=await Promise.all([
-      fetch(`${EPC_GIS_ZONING}?${gP}&outFields=ZONING,ZONETYPE`).then(r=>r.json()),
-      fetch(`${EPC_GIS_PARCEL}?${gP}&outFields=PARCEL,HYPERLINK,Shape.STArea()`).then(r=>r.json()),
-      fetch(`${EPC_GIS_OVERLAY}?${gP}&outFields=ZONEOVERLAY`).then(r=>r.json()),
-      fetch(`${EPC_GIS_CITIES}?${gP}&outFields=NAME`).then(r=>r.json()).catch(()=>({features:[]})),
-      fetch(`${CDPHE}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=Facility_Name,Facility_Type,Facility_Type_Detail,Address_Full,Licensed_Beds_Total,Operating_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&resultRecordCount=200&f=json`).then(r=>r.json()).catch(()=>({features:[]}))
+      fetch(`${EPC_GIS_ZONING}?${gP}&outFields=ZONING,ZONETYPE`,{signal}).then(r=>r.json()),
+      fetch(`${EPC_GIS_PARCEL}?${gP}&outFields=PARCEL,HYPERLINK,Shape.STArea()`,{signal}).then(r=>r.json()),
+      fetch(`${EPC_GIS_OVERLAY}?${gP}&outFields=ZONEOVERLAY`,{signal}).then(r=>r.json()),
+      fetch(`${EPC_GIS_CITIES}?${gP}&outFields=NAME`,{signal}).then(r=>r.json()).catch(e=>{if(e.name==="AbortError")throw e;return{features:[]}}),
+      fetch(`${CDPHE}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${GIS_MI}&units=esriSRUnit_Meter&outFields=Facility_Name,Facility_Type,Facility_Type_Detail,Address_Full,Licensed_Beds_Total,Operating_Status,Latitude,Longitude&returnGeometry=true&outSR=4326&resultRecordCount=200&f=json`,{signal}).then(r=>r.json()).catch(e=>{if(e.name==="AbortError")throw e;return{features:[]}})
     ]);
     const zoning=zoningRes.features?.length?zoningRes.features[0].attributes:null;
     let parcel=null;const pCount=parcelRes.features?.length||0;
@@ -288,9 +300,9 @@ async function epcGisRun(candidate){
     let epcBuilding={sqft:null,yearBuilt:null,beds:null,baths:null,buildingUse:null};
     if(parcelId){
       try{
-        const spaRes=await fetch(`${SPATIALEST_API}/${parcelId}`);
+        const spaRes=await fetch(`${SPATIALEST_API}/${parcelId}`,{signal});
         if(spaRes.ok){const spaData=await spaRes.json();const sp=parseSpatialest(spaData);epcBuilding={sqft:sp.sqft,yearBuilt:sp.yearBuilt,beds:sp.beds,baths:sp.baths,buildingUse:sp.buildingUse||sp.zone}}
-      }catch(e){console.warn("Spatialest lookup failed for EPC:",e)}
+      }catch(e){if(e.name==="AbortError")throw e;console.warn("Spatialest lookup failed for EPC:",e)}
     }
 
     let cityWarning=null;
@@ -322,36 +334,38 @@ async function epcGisRun(candidate){
       if(ol.includes("CAD")){ST.form.epcCadO="cado"}else{ST.form.epcCadO="none"}
     } else {ST.form.epcCadO="none"}
     setGisPhase("done");render();
-    epcWaterSewerCheck(candidate.attributes.Match_addr,lat,lon);
-  }catch(err){setGisPhase("error");ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
+    epcWaterSewerCheck(candidate.attributes.Match_addr,lat,lon,signal);
+  }catch(err){if(err.name==="AbortError")throw err;setGisPhase("error");ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
 }
 
 async function epcGisStart(){
   const raw=document.getElementById("epc-addr").value.trim();
   if(!raw)return;
+  const signal=gisNewAbort();
   ST.form.address=raw;setGisPhase("searching");ST.gisError=null;render();
   try{
-    const candidates=await epcFindCandidates(raw);
+    const candidates=await epcFindCandidates(raw,signal);
     if(candidates.length===0){
       setGisPhase("error");
       ST.gisError="No matching address found in El Paso County. Try including city name or check spelling.";
       render();return;
     }
-    if(candidates.length===1){await epcGisRun(candidates[0])}
+    if(candidates.length===1){await epcGisRun(candidates[0],signal)}
     else{
       setGisPhase("disambig");
       ST.gisAddresses=candidates.map(c=>({addr:c.attributes.Match_addr,x:c.location.x,y:c.location.y,score:c.score}));
       render();
     }
-  }catch(err){setGisPhase("error");ST.gisError="Geocoding failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
+  }catch(err){if(err.name==="AbortError")return;setGisPhase("error");ST.gisError="Geocoding failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
 }
 
 async function epcGisSelect(idx){
+  const signal=gisNewAbort();
   setGisPhase("querying");render();
   try{
     const a=ST.gisAddresses[idx];
-    await epcGisRun({location:{x:a.x,y:a.y},attributes:{Match_addr:a.addr}});
-  }catch(err){setGisPhase("error");ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
+    await epcGisRun({location:{x:a.x,y:a.y},attributes:{Match_addr:a.addr}},signal);
+  }catch(err){if(err.name==="AbortError")return;setGisPhase("error");ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
 }
 
 function epcGisApply(){
@@ -364,14 +378,14 @@ function epcGisApply(){
 /* ═══════════════════════════════════════════════════════════════════
    EPC WATER / SEWER INFRASTRUCTURE CHECK
    ═══════════════════════════════════════════════════════════════════ */
-async function epcWaterSewerCheck(addressStr,lat,lon){
+async function epcWaterSewerCheck(addressStr,lat,lon,signal){
   ST.epcInfraStatus=null;ST.epcInfraDistrict=null;ST.epcInfraChecking=true;render();
   try{
     const gP=`geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=NAME&returnGeometry=false&f=json`;
     const[swdRes,sanRes,waterRes]=await Promise.all([
-      fetch(`${EPC_DIST_SWD}?${gP}`).then(r=>r.json()).catch(()=>({features:[]})),
-      fetch(`${EPC_DIST_SAN}?${gP}`).then(r=>r.json()).catch(()=>({features:[]})),
-      fetch(`${EPC_DIST_WATER}?${gP}`).then(r=>r.json()).catch(()=>({features:[]})),
+      fetch(`${EPC_DIST_SWD}?${gP}`,{signal}).then(r=>r.json()).catch(e=>{if(e.name==="AbortError")throw e;return{features:[]}}),
+      fetch(`${EPC_DIST_SAN}?${gP}`,{signal}).then(r=>r.json()).catch(e=>{if(e.name==="AbortError")throw e;return{features:[]}}),
+      fetch(`${EPC_DIST_WATER}?${gP}`,{signal}).then(r=>r.json()).catch(e=>{if(e.name==="AbortError")throw e;return{features:[]}}),
     ]);
     const names=[];
     for(const data of[swdRes,sanRes,waterRes]){
@@ -385,6 +399,7 @@ async function epcWaterSewerCheck(addressStr,lat,lon){
       ST.epcInfraStatus="well-septic";ST.epcInfraDistrict=null;
     }
   }catch(e){
+    if(e.name==="AbortError"){ST.epcInfraChecking=false;return}
     ST.epcInfraStatus="unknown";ST.epcInfraDistrict="Lookup failed: "+e.message;
   }
   ST.epcInfraChecking=false;render();
@@ -393,10 +408,10 @@ async function epcWaterSewerCheck(addressStr,lat,lon){
 /* ═══════════════════════════════════════════════════════════════════
    MANITOU SPRINGS GIS — Geocode → EPC Parcel → Spatialest → FEMA → Historic
    ═══════════════════════════════════════════════════════════════════ */
-async function manFindCandidates(raw){
+async function manFindCandidates(raw,signal){
   const q=encodeURIComponent(raw.replace(/,?\s*(manitou\s*springs|CO|Colorado|\d{5}(-\d{4})?)[\s,]*/gi," ").trim());
   const url=`${MAN_GEOCODE}?SingleLine=${q}&searchExtent=${MAN_BBOX}&outFields=Addr_type,Match_addr,StAddr&maxLocations=5&f=json`;
-  const res=await fetch(url);const data=await res.json();
+  const res=await fetch(url,{signal});const data=await res.json();
   return(data.candidates||[]).filter(c=>c.score>=80);
 }
 
@@ -441,7 +456,7 @@ function parseSpatialest(data){
   return result;
 }
 
-async function manGisRun(candidate){
+async function manGisRun(candidate,signal){
   setGisPhase("querying");render();
   const lon=candidate.location.x,lat=candidate.location.y;
   // Bug 1 fix: use StAddr (has street number) if available, else Match_addr
@@ -451,7 +466,7 @@ async function manGisRun(candidate){
     const geom=`${lon},${lat}`;
     // Step 1: Query EPC parcel layer (MUST pass inSR=4326 for WGS84 coordinates)
     const parcelUrl=`${EPC_GIS_PARCEL}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=PARCEL,HYPERLINK,Shape.STArea()&returnGeometry=false&f=json`;
-    const parcelRes=await fetch(parcelUrl);const parcelData=await parcelRes.json();
+    const parcelRes=await fetch(parcelUrl,{signal});const parcelData=await parcelRes.json();
     let parcel=null;
     if(parcelData.features?.length===1)parcel=parcelData.features[0].attributes;
     else if(parcelData.features?.length>1)parcel=parcelData.features.map(f=>f.attributes).sort((a,b)=>(b["Shape.STArea()"]||0)-(a["Shape.STArea()"]||0))[0];
@@ -465,32 +480,32 @@ async function manGisRun(candidate){
     let spa={zone:null,sqft:null,yearBuilt:null,beds:null,baths:null,lotSize:null,buildingUse:null};
     if(parcelId){
       try{
-        const spaRes=await fetch(`${SPATIALEST_API}/${parcelId}`);
+        const spaRes=await fetch(`${SPATIALEST_API}/${parcelId}`,{signal});
         if(spaRes.ok){const spaData=await spaRes.json();spa=parseSpatialest(spaData)}
-      }catch(e){console.warn("Spatialest lookup failed:",e)}
+      }catch(e){if(e.name==="AbortError")throw e;console.warn("Spatialest lookup failed:",e)}
     }
 
     // Step 3: Query FEMA NFHL for flood hazard
     let hazardStatus="unknown";
     try{
       const femaUrl=`${FEMA_NFHL}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=FLD_ZONE,ZONE_SUBTY&returnGeometry=false&f=json`;
-      const femaRes=await fetch(femaUrl);const femaData=await femaRes.json();
+      const femaRes=await fetch(femaUrl,{signal});const femaData=await femaRes.json();
       if(femaData.features?.length){
         const fz=femaData.features[0].attributes.FLD_ZONE;
         // A, AE, AH, AO, V, VE = high risk; X (shaded) = moderate; X (unshaded), D = minimal
         if(["A","AE","AH","AO","V","VE","AR"].includes(fz))hazardStatus="yes";
         else hazardStatus="no";
       } else {hazardStatus="no"}
-    }catch(e){console.warn("FEMA NFHL lookup failed:",e)}
+    }catch(e){if(e.name==="AbortError")throw e;console.warn("FEMA NFHL lookup failed:",e)}
 
     // Step 4: Query NPS National Register Historic Districts
     let historicStatus="unknown";
     try{
       const npsUrl=`${NPS_HISTORIC}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=RESNAME&returnGeometry=false&f=json`;
-      const npsRes=await fetch(npsUrl);const npsData=await npsRes.json();
+      const npsRes=await fetch(npsUrl,{signal});const npsData=await npsRes.json();
       if(npsData.features?.length)historicStatus="yes";
       else historicStatus="no";
-    }catch(e){console.warn("NPS Historic Districts lookup failed:",e)}
+    }catch(e){if(e.name==="AbortError")throw e;console.warn("NPS Historic Districts lookup failed:",e)}
 
     // Store auto-determined values in state
     ST.manAutoZone=spa.zone;

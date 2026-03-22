@@ -258,10 +258,17 @@ a.cite:hover{color:#6EA4E8;text-decoration:underline}
   button,select,.radio-btn,.check-btn,.disambig-item,.jur-card{min-height:44px}
 }
 
+/* ── Tab panels: only active visible on screen ─────────────── */
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* ── SW Update Banner ─────────────────────────────────────────── */
+#sw-banner{position:fixed;top:0;left:0;right:0;z-index:9999;background:#1A3D28;border-bottom:1px solid #2A5A3A;padding:8px 16px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#E8E8EC}
+
 /* ── Print / PDF ───────────────────────────────────────────────── */
 @media print{
   body{background:#fff;color:#000;font-size:11pt}
-  .topbar,.footer,.btn-row,.tab-row,.btn-primary,.btn-secondary,.tab-btn,.pg-progress,.addr-row,.override-row,.data-caveats{display:none!important}
+  .topbar,.footer,.btn-row,.tab-row,.btn-primary,.btn-secondary,.tab-btn,.pg-progress,.addr-row,.override-row,.data-caveats,#sw-banner{display:none!important}
   #app{max-width:100%;padding:0.5cm}
   .dash-header{border-bottom:1pt solid #ccc;padding-bottom:8pt;margin-bottom:12pt}
   .dash-title{color:#000;font-size:14pt}
@@ -285,4 +292,6 @@ a.cite:hover{color:#6EA4E8;text-decoration:underline}
   .fact-val{color:#000}
   a{color:#000;text-decoration:none}
   .caveat-card{break-inside:avoid;border:1pt solid #ccc}
+  .tab-panel{display:block!important;border-top:2pt solid #ccc;padding-top:8pt;margin-top:12pt}
+  .tab-panel::before{content:attr(data-tab);display:block;font-size:12pt;font-weight:bold;color:#000;margin-bottom:6pt}
 }
