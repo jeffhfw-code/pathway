@@ -707,10 +707,11 @@ test("G-12: natural hazard + Permitted = not blocked",()=>{
   assert(ghLg.v!=="no"||!ghLg.stops.some(s=>s.msg.includes("natural hazards")),"hazard should not block by-right pathway");
 });
 
-test("Medical services triggers classification ambiguity caveat",()=>{
+test("Medical services: GH-LG still viable with interpretive caveat",()=>{
   const r=runManitouEngine(baseForm({zone:"HDR",manClinicalDetox:"yes"}));
   const ghLg=r.results.find(p=>p.id==="GH-LG");
-  assert(ghLg.cav.some(c=>c.msg.includes("boundary between Group Home Large and Medical Care")));
+  assertEqual(ghLg.v,"yes","GH-LG should remain viable");
+  assert(ghLg.cav.some(c=>c.msg.includes("boundary between Group Home Large and Medical Care")&&!c.blocking));
 });
 
 endSuite();
