@@ -179,9 +179,15 @@ function render(){
           h+=`<div style="font-size:11px;color:#6B6B78;padding:2px 0 4px;line-height:1.5;">Source: assessor LAND_AREA field. <a href="${ASSR}" target="_blank" rel="noopener" style="color:#6EA4E8;font-weight:500;">Verify</a> if precision matters.</div>`;
           if(ST.gisAutoLot>=11500&&ST.gisAutoLot<=12500){h+=`<div style="font-size:11px;color:#F09595;padding:2px 0 4px;line-height:1.5;font-weight:500;">\u26a0 Lot size is within 500 sf of the 12,000 sf Type 2 threshold (§ 11.2.10.1.C). Verify exact lot size with the assessor.</div>`}
         }
-        h+=`<div class="auto-field"><span class="auto-label">RC facilities within 1 mi</span><span class="auto-val">${ST.gisAutoRC}<span class="auto-badge api">API</span></span></div>`;
-        h+=`<div class="auto-field"><span class="auto-label">Type 3/4 within 1 mi</span><span class="auto-val">${ST.gisAutoRC34}<span class="auto-badge api">API</span></span></div>`;
-        h+=`<div class="auto-field"><span class="auto-label">Distance to nearest 3/4</span><span class="auto-val">${ST.gisAutoDist34!=null?ST.gisAutoDist34.toLocaleString()+" ft":"None within 1 mi"}<span class="auto-badge api">API</span></span></div>`;
+        const _sp=knownZone?getSp(resolvedZone):null;
+        h+=`<div class="auto-field"><span class="auto-label">RC facilities within 1 mi</span><span class="auto-val">${ST.gisAutoRC}${ST.gisAutoRC>3?` <span style="color:#F09595;font-size:11px;font-weight:500;">(exceeds density max 3 — § 11.2.9.2.B)</span>`:" <span style=\"color:#4ADE80;font-size:11px;\">(density OK)</span>"}<span class="auto-badge api">API</span></span></div>`;
+        h+=`<div class="auto-field"><span class="auto-label">Type 3/4 within 1 mi</span><span class="auto-val">${ST.gisAutoRC34}${ST.gisAutoRC34>3?` <span style="color:#F09595;font-size:11px;font-weight:500;">(exceeds density max 3 — § 11.2.12.1.B)</span>`:" <span style=\"color:#4ADE80;font-size:11px;\">(density OK)</span>"}<span class="auto-badge api">API</span></span></div>`;
+        if(_sp){
+          const _d34=ST.gisAutoDist34;const _pass=_d34==null||_d34>=_sp.d;
+          h+=`<div class="auto-field"><span class="auto-label">Nearest Type 3/4 vs ${_sp.d.toLocaleString()} ft min</span><span class="auto-val">${_d34!=null?_d34.toLocaleString()+" ft":"None within 1 mi"}${_d34!=null?(_pass?` <span style="color:#4ADE80;font-size:11px;">(spacing OK)</span>`:` <span style="color:#F09595;font-size:11px;font-weight:500;">(below ${_sp.d.toLocaleString()} ft min — ${_sp.c3})</span>`):""}<span class="auto-badge api">API</span></span></div>`;
+        }else{
+          h+=`<div class="auto-field"><span class="auto-label">Distance to nearest 3/4</span><span class="auto-val">${ST.gisAutoDist34!=null?ST.gisAutoDist34.toLocaleString()+" ft":"None within 1 mi"}${!knownZone?"":" <span style=\"color:#4ADE80;font-size:11px;\">(no spacing rule)</span>"}<span class="auto-badge api">API</span></span></div>`;
+        }
         h+=`</div></div>`;
         h+=`<details class="override-row"><summary>Override auto-populated values</summary><div class="override-grid">`;
         h+=`<div class="override-item"><label>Zone district</label><select id="ov-zone" onchange="ST.gisOverrides.zone=this.value"><option value="">— Use API value —</option>`;
@@ -284,7 +290,8 @@ function render(){
         h+=`<div class="auto-field"><span class="auto-label">Overlays</span><span class="auto-val">${ST.cosAutoOverlays.length?ST.cosAutoOverlays.join(", "):"None"}<span class="auto-badge api">API</span></span></div>`;
         h+=`<div class="auto-field"><span class="auto-label">CDPHE facilities within 1 mi</span><span class="auto-val">${ST.cosAutoFacilities.length}<span class="auto-badge api">API</span></span></div>`;
         h+=`<div class="auto-field"><span class="auto-label">Assisted living within 1 mi</span><span class="auto-val">${ST.cosAutoALR}<span class="auto-badge api">API</span></span></div>`;
-        h+=`<div class="auto-field"><span class="auto-label">Nearest ALR/nursing facility</span><span class="auto-val">${ST.cosAutoNearestFacDist!=null?ST.cosAutoNearestFacDist.toLocaleString()+" ft":"None within 1 mi"}<span class="auto-badge api">API</span></span></div>`;
+        const _cosDist=ST.cosAutoNearestFacDist;const _cosPass=_cosDist==null||_cosDist>=1000;
+        h+=`<div class="auto-field"><span class="auto-label">Nearest facility vs 1,000 ft min</span><span class="auto-val">${_cosDist!=null?_cosDist.toLocaleString()+" ft":"None within 1 mi"}${_cosDist!=null?(_cosPass?` <span style="color:#4ADE80;font-size:11px;">(separation OK)</span>`:` <span style="color:#F09595;font-size:11px;font-weight:500;">(within 1,000 ft — § 7.3.301E.1.a)</span>`):""}<span class="auto-badge api">API</span></span></div>`;
         if(ST.cosAutoCUP.length)h+=`<div class="auto-field"><span class="auto-label">Existing CUP records</span><span class="auto-val">${ST.cosAutoCUP.join(", ")}<span class="auto-badge api">API</span></span></div>`;
         h+=`</div></div>`;
         h+=`<details class="override-row"><summary>Override auto-populated values</summary><div class="override-grid">`;
@@ -411,10 +418,13 @@ function render(){
         } else if(ST.epcInfraStatus==="unknown"){
           h+=`<div class="auto-field"><span class="auto-label">Water &amp; sewer</span><span class="auto-val" style="color:#9B9BA7;">Unknown — ${esc(ST.epcInfraDistrict||"confirm with El Paso County Assessor")}<span class="auto-badge api">API</span></span></div>`;
         }
-        // CDPHE licensed facilities within 1 mile
+        // CDPHE licensed facilities — 500 ft separation rule
         if(ST.epcAutoFacilities.length>0){
           h+=`<div class="auto-field"><span class="auto-label">Licensed facilities within 1 mi</span><span class="auto-val">${ST.epcAutoFacilities.length}<span class="auto-badge api">CDPHE</span></span></div>`;
-          if(ST.epcAutoNearestFacName)h+=`<div class="auto-field"><span class="auto-label">Nearest licensed facility</span><span class="auto-val">${esc(ST.epcAutoNearestFacName)} — ${ST.epcAutoNearestFacDist.toLocaleString()} ft<span class="auto-badge api">CDPHE</span></span></div>`;
+          if(ST.epcAutoNearestFacName){
+            const _epcPass=ST.epcAutoNearestFacDist>=500;
+            h+=`<div class="auto-field"><span class="auto-label">Nearest facility vs 500 ft min</span><span class="auto-val">${esc(ST.epcAutoNearestFacName)} — ${ST.epcAutoNearestFacDist.toLocaleString()} ft${_epcPass?` <span style="color:#4ADE80;font-size:11px;">(separation OK)</span>`:` <span style="color:#F09595;font-size:11px;font-weight:500;">(within 500 ft — § 5.2.17(A))</span>`}<span class="auto-badge api">CDPHE</span></span></div>`;
+          }
         } else {
           h+=`<div class="auto-field"><span class="auto-label">Licensed facilities within 1 mi</span><span class="auto-val">None found<span class="auto-badge api">CDPHE</span></span></div>`;
         }
