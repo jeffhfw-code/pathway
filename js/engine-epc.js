@@ -7,7 +7,7 @@ function runEPCEngine(f){
   const z=f.zone;
   if(z==="PUD")return{error:"PUD district — use eligibility governed by the approved PUD development plan, not Table 5-1. Variance of use is not available in PUD (§ 5.3.3(B)(1)). Verify with El Paso County PCD."};
   const ut=EPC_UT[z];if(!ut)return{error:"Zone not found in EPC Use Table."};
-  const lic=f.licensing,cor=f.correctional==="yes",sexOff=f.epcSexOffender;
+  const cor=f.correctional==="yes",sexOff=f.epcSexOffender;
   const op24=f.op24hr==="yes",overnight=f.overnight==="yes";
   const nonprofit=f.epcNonprofit==="yes";
   const sep=f.epcSeparation,cadO=f.epcCadO||"none";
@@ -18,9 +18,7 @@ function runEPCEngine(f){
 
   // ──── PASS 2: Global rules ────────────────────────────────────
 
-  // G-01: Licensing (scope: all pathways, but hard stop only for state-licensed sub-types)
-  if(lic==="no")gS.push({msg:"Cannot obtain state licensing/certification",cite:"§ 5.2.17(C)(4)"});
-  if(lic==="unknown")gC.push({msg:"Licensing status unknown — copies of all applicable licenses must be maintained on premises",cite:"§ 5.2.17(C)(4)",blocking:true,resolve:"Confirm with CDPHE/BHA/CARR."});
+  // G-01: Licensing hardcoded — BH/SUD operators always have state licensing (FORM_DEFAULTS)
 
   // G-02: Sex offender — hard stop for all GH pathways (applied per-pathway, but if yes, note globally)
   // Applied per-pathway below since it only affects GH
@@ -152,16 +150,7 @@ function runEPCEngine(f){
       pw.cav.push({msg:"Correctional population: C.R.S. § 30-28-115(2)(b.5) excludes persons convicted of violent felonies and NGRI for violent offenses from mental illness group homes",cite:"C.R.S. § 30-28-115(2)(b.5)",blocking:true,resolve:"Verify population eligibility."});
     }
 
-    // State licensing prerequisite for preemption (mental illness, DD, aged)
-    if(subtype==="mental"&&lic!=="yes"){
-      pw.cav.push({msg:"State licensing required for C.R.S. § 30-28-115(2)(b.5) preemption. If SP-05 reverts, unlicensed operation loses residential-use-by-right status for ≤8.",cite:"C.R.S. § 30-28-115(2)(b.5)",blocking:false});
-    }
-    if(subtype==="dd"&&lic!=="yes"){
-      pw.cav.push({msg:"State licensing required for C.R.S. § 30-28-115(2)(a) preemption.",cite:"C.R.S. § 30-28-115(2)(a)",blocking:false});
-    }
-    if(subtype==="aged"&&lic!=="yes"){
-      pw.cav.push({msg:"State licensing/ALR certification may be required for C.R.S. § 30-28-115(2)(b) preemption.",cite:"C.R.S. § 30-28-115(2)(b)",blocking:false});
-    }
+    // State licensing prerequisite for preemption — always satisfied (BH/SUD operators have licensing via FORM_DEFAULTS)
 
     // SP-04: Recovery residence preemption note (disabled sub-type only)
     if(subtype==="disabled"){

@@ -37,8 +37,8 @@ function baseForm(overrides){
     correctional:"no",rcWithin1mi:0,rcType34within1mi:0,distType34:99999,
     op24hr:"yes",overnight:"yes",licensing:"yes",address:"Test Address",
     fhaProtected:"yes",constructionType:"new",fbzPermits:null,pdzPermits:null,
-    targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],
-    distGLRDetox:99999,nearestAL:"no",
+    cosOverlays:[],distGLRDetox:99999,nearestAL:"no",
+    cosPriorUses:["none"],cosPriorStillOperating:null,cosMonthsDiscontinued:null,cosProposedExpansion:"no",
     epcSexOffender:"no",epcNonprofit:"no",epcSeparation:null,epcCadO:"none",
     manClinicalDetox:"no",manMATDispensing:"no",manMedManagement:"no",
     manNursing24hr:"no",manOtherMedical:"no",manOvernightBeds:"yes",
@@ -138,18 +138,7 @@ test("Type 3/4 are NP in SU zone",()=>{
   assertEqual(p3.v,"no","Type 3");assertEqual(p4.v,"no","Type 4");
 });
 
-test("Licensing=no blocks all pathways",()=>{
-  const r=runEngine(baseForm({zone:"S-MX-3",licensing:"no"}));
-  assertEqual(r.p2,"fail");assertEqual(r.results.length,0);
-});
-
-test("Licensing=unknown creates blocking caveat",()=>{
-  const r=runEngine(baseForm({zone:"S-MX-3",licensing:"unknown"}));
-  assertEqual(r.p2,"pass");
-  const p1=r.results.find(p=>p.id==="P1");
-  assertEqual(p1.v,"no","blocking caveat = not viable");
-  assert(p1.stops.some(s=>s.msg.includes("Licensing status unknown")),"should have licensing stop");
-});
+// Licensing hardcoded to "yes" via FORM_DEFAULTS — no licensing tests needed
 
 test("Correctional in SU blocks Type 1",()=>{
   const r=runEngine(baseForm({zone:"S-SU-Fx",correctional:"yes"}));
@@ -309,28 +298,22 @@ endSuite();
 
 suite("COS Engine — Pathway Results");
 
-test("R-4 zone produces HSE + GLR pathways",()=>{
+test("FHA=yes produces HSE pathways only (no GLR)",()=>{
   const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
   assertEqual(r.p2,"pass");
-  assert(r.results.length>0,"should have pathways");
   assert(r.results.some(p=>p.id==="HSE-S"),"should have HSE-S");
+  assert(!r.results.some(p=>p.id==="GLR-S"),"should NOT have GLR-S");
 });
 
-test("Licensing=no blocks all COS pathways",()=>{
-  const r=runCOSEngine(baseForm({zone:"R-4",licensing:"no"}));
-  assertEqual(r.p2,"fail");
+test("FHA=no produces GLR pathways only (no HSE)",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"no"}));
+  assert(r.results.some(p=>p.id==="GLR-S"),"should have GLR-S");
+  assert(!r.results.some(p=>p.id==="HSE-S"),"should NOT have HSE-S");
 });
 
 test("Correctional forces GLR (not HSE)",()=>{
   const r=runCOSEngine(baseForm({zone:"R-4",correctional:"yes"}));
-  // Correctional means fha=false, so no HSE pathways
   assert(!r.results.some(p=>p.id.startsWith("HSE")),"no HSE when correctional");
-  assert(r.results.some(p=>p.id.startsWith("GLR")),"should have GLR");
-});
-
-test("FHA unknown produces both HSE and GLR",()=>{
-  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"unknown"}));
-  assert(r.results.some(p=>p.id.startsWith("HSE")),"should have HSE");
   assert(r.results.some(p=>p.id.startsWith("GLR")),"should have GLR");
 });
 
@@ -346,33 +329,77 @@ test("GLR separation blocks when within 1000 ft",()=>{
   const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"no",distGLRDetox:800}));
   const glrS=r.results.find(p=>p.id==="GLR-S");
   assertEqual(glrS.v,"no","GLR-S blocked by separation");
-  assert(glrS.stops[0].msg.includes("1,000 ft"));
+  assert(glrS.stops.some(s=>s.msg.includes("1,000 ft")));
 });
 
-test("AL exception bypasses separation",()=>{
+test("AL exception bypasses separation with advisory caveat",()=>{
   const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"no",distGLRDetox:800,nearestAL:"yes"}));
   const glrS=r.results.find(p=>p.id==="GLR-S");
-  assert(glrS.v!=="no"||!glrS.stops.some(s=>s.msg.includes("1,000 ft")),"AL exception should bypass separation");
+  assertEqual(glrS.v,"yes","AL exception should make pathway viable");
+  assert(glrS.cav.some(c=>c.msg.includes("AL exception")),"should have AL advisory caveat");
+  assert(!glrS.cav.find(c=>c.msg.includes("AL exception")).blocking,"AL caveat should be non-blocking");
 });
 
-test("Hospice pathway appears only when targetTerminal set",()=>{
-  const r1=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
-  assert(!r1.results.some(p=>p.id==="HOSPICE"),"no hospice without terminal");
-  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetTerminal:"yes"}));
-  assert(r2.results.some(p=>p.id==="HOSPICE"),"hospice with terminal");
+test("Hospice always Not Viable (BH/SUD population)",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
+  const hosp=r.results.find(p=>p.id==="HOSPICE");
+  assert(hosp,"HOSPICE should always appear");
+  assertEqual(hosp.v,"no","HOSPICE should be Not Viable");
+  assert(hosp.stops.some(s=>s.msg.includes("BH/SUD")),"should cite population mismatch");
 });
 
-test("LTC pathway appears only when targetOver60 set",()=>{
-  const r1=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
-  assert(!r1.results.some(p=>p.id==="LTC"),"no LTC without over60");
-  const r2=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",targetOver60:"yes"}));
-  assert(r2.results.some(p=>p.id==="LTC"),"LTC with over60");
+test("LTC always Not Viable (BH/SUD population)",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
+  const ltc=r.results.find(p=>p.id==="LTC");
+  assert(ltc,"LTC should always appear");
+  assertEqual(ltc.v,"no","LTC should be Not Viable");
+  assert(ltc.stops.some(s=>s.msg.includes("BH/SUD")),"should cite population mismatch");
 });
 
-test("Existing conforming use in COS",()=>{
-  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",existingRC:"yes",maintained:"yes"}));
+test("Shelter always Not Viable (BH/SUD population)",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
+  const sh=r.results.find(p=>p.id==="SHELTER");
+  assert(sh,"SHELTER should always appear");
+  assertEqual(sh.v,"no","SHELTER should be Not Viable");
+  assert(sh.stops.some(s=>s.msg.includes("BH/SUD")),"should cite population mismatch");
+});
+
+test("NC viable with prior use operating",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",cosPriorUses:["hse"],cosPriorStillOperating:"yes"}));
   const nc=r.results.find(p=>p.id==="NC");
-  assertEqual(nc.v,"yes");
+  assertEqual(nc.v,"yes","NC should be viable when prior use operating");
+});
+
+test("NC blocked when prior use discontinued 14 months",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",cosPriorUses:["glr"],cosPriorStillOperating:"no",cosMonthsDiscontinued:14}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assertEqual(nc.v,"no","NC should be Not Viable after 12+ months");
+  assert(nc.stops.some(s=>s.msg.includes("12+")));
+});
+
+test("NC blocked when prior use discontinued 6 months (at risk)",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",cosPriorUses:["hse"],cosPriorStillOperating:"no",cosMonthsDiscontinued:6}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assertEqual(nc.v,"no","NC at risk = Not Viable");
+  assert(nc.stops.some(s=>s.msg.includes("at risk")));
+});
+
+test("NC blocked when no prior use",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",cosPriorUses:["none"]}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assertEqual(nc.v,"no","NC should be Not Viable without prior use");
+});
+
+test("NC expansion caveat is non-blocking",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes",cosPriorUses:["hse"],cosPriorStillOperating:"yes",cosProposedExpansion:"yes"}));
+  const nc=r.results.find(p=>p.id==="NC");
+  assertEqual(nc.v,"yes","NC should still be viable with expansion");
+  assert(nc.cav.some(c=>c.msg.includes("expansion")),"should have expansion caveat");
+});
+
+test("No pathway returns v:conditional",()=>{
+  const r=runCOSEngine(baseForm({zone:"R-4",fhaProtected:"yes"}));
+  r.results.forEach(p=>{assert(p.v!=="conditional",p.id+" should not be conditional")});
 });
 
 endSuite();
@@ -498,10 +525,7 @@ test("PUD returns error",()=>{
   assert(r.error.includes("PUD"));
 });
 
-test("Licensing=no blocks all EPC pathways",()=>{
-  const r=runEPCEngine(baseForm({zone:"RS-20000",licensing:"no"}));
-  assertEqual(r.p2,"fail");
-});
+// Licensing hardcoded to "yes" via FORM_DEFAULTS — no licensing tests needed
 
 test("Existing conforming use in EPC",()=>{
   const r=runEPCEngine(baseForm({zone:"RS-20000",existingRC:"yes",maintained:"yes"}));
@@ -986,11 +1010,11 @@ test("Detox viable when beyond 1000 ft",()=>{
   assert(detox.v!=="no"||!detox.stops.some(s=>s.msg.includes("1,000 ft")),"DETOX should not be blocked by separation");
 });
 
-test("Shelter appears only when tempShelter set",()=>{
-  const r1=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes"}));
-  assert(!r1.results.some(p=>p.id==="SHELTER"),"no shelter without tempShelter");
-  const r2=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes",tempShelter:"yes"}));
-  assert(r2.results.some(p=>p.id==="SHELTER"),"shelter with tempShelter=yes");
+test("Shelter always Not Viable in COS (BH/SUD population)",()=>{
+  const r=runCOSEngine(baseForm({zone:"MX-M",fhaProtected:"yes"}));
+  const sh=r.results.find(p=>p.id==="SHELTER");
+  assert(sh,"SHELTER should always appear");
+  assertEqual(sh.v,"no","SHELTER should be Not Viable");
 });
 
 test("FBZ zone does not crash — returns pathways",()=>{

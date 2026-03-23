@@ -23,7 +23,7 @@ function getPages(){
 }
 
 /* Page-to-form-key map for skipping defaulted pages */
-const PAGE_KEY_MAP={licensing:"licensing",correctional:"correctional",op24hr:"op24hr",overnight:"overnight",epcSexOffender:"epcSexOffender",epcNonprofit:"epcNonprofit"};
+const PAGE_KEY_MAP={correctional:"correctional",op24hr:"op24hr",overnight:"overnight",epcSexOffender:"epcSexOffender",epcNonprofit:"epcNonprofit"};
 function skipPage(id){const k=PAGE_KEY_MAP[id];return k&&FORM_DEFAULTS[k]!==undefined}
 function addIf(p,id){if(!skipPage(id))p.push({id})}
 
@@ -31,7 +31,7 @@ function getDenverPages(){
   const p=[{id:"addressLookup"},{id:"zone"}];const z=ST.form.zone;if(!z)return p;
   const ut=UT[z];if(!ut)return p;
   if(ut.t1==="NP"&&ut.t2==="NP"&&ut.t3==="NP"&&ut.t4==="NP"){p.push({id:"allNP"});return p}
-  addIf(p,"licensing");addIf(p,"correctional");addIf(p,"op24hr");addIf(p,"overnight");
+  addIf(p,"correctional");addIf(p,"op24hr");addIf(p,"overnight");
   if(ut.t1!=="NP")p.push({id:"religious"});
   p.push({id:"existingRC"});
   if(ST.form.existingRC==="yes")p.push({id:"maintained"});
@@ -48,21 +48,19 @@ function getCOSPages(){
   // Check if anything is permitted at all
   const allN=Object.values(ut).every(v=>v==="N");
   if(allN){p.push({id:"allNP"});return p}
-  addIf(p,"licensing");addIf(p,"correctional");p.push({id:"cosFHA"});
+  addIf(p,"correctional");p.push({id:"cosFHA"});
   // If FBZ or PDZ, ask about plan
   if(z==="FBZ")p.push({id:"cosFBZ"});
   if(z==="PDZ")p.push({id:"cosPDZ"});
-  addIf(p,"op24hr");
-  // Population-specific questions
-  p.push({id:"cosPopulation"});
   // Separation — only matters for GLR/Detox pathways
   const hasGLR=ut.glrS!=="N"||ut.glrM!=="N"||ut.glrL!=="N"||ut.detox!=="N";
   if(hasGLR)p.push({id:"cosDistance"});
   // Construction type
   p.push({id:"cosConstruction"});
-  // Existing use
-  p.push({id:"existingRC"});
-  if(ST.form.existingRC==="yes")p.push({id:"maintained"});
+  // Prior-use checklist (replaces existingRC/maintained)
+  p.push({id:"cosPriorUse"});
+  const pu=ST.form.cosPriorUses;
+  if(pu.length>0&&!pu.includes("none"))p.push({id:"cosPriorStatus"});
   p.push({id:"review"});return p;
 }
 
@@ -73,7 +71,6 @@ function getEPCPages(){
   const allN=Object.values(ut).every(v=>v==="N");
   if(allN){p.push({id:"allNP"});return p}
   // Site facts — engine tests all 16 pathways against these inputs
-  addIf(p,"licensing");
   addIf(p,"correctional");
   addIf(p,"epcSexOffender");
   addIf(p,"op24hr");
@@ -217,7 +214,6 @@ function render(){
       h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
     }
     else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">${ST.jurisdiction==="denver"?"Residential Care is not permitted in any form":"No group living or human services uses are permitted"} in the <strong>${esc(f.zone)}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application (if available).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
-    else if(page.id==="licensing"){h+=`<p class="q-title">Licensing and certification</p><p class="q-sub">Can the operator obtain all required state and City licensing or certification?</p><div class="radio-row">${r3("licensing",f.licensing)}</div><div class="btn-row">${bk}${f.licensing!==null?nx:""}</div>`}
     else if(page.id==="correctional"){h+=`<p class="q-title">Correctional supervision population</p><p class="q-sub">Will the facility serve non-paroled persons placed by a court, corrections department, or supervised transition program?</p><div class="radio-row">${r2("correctional",f.correctional)}</div><div class="field-help">Does not include parolees or voluntary participants.</div><div class="btn-row">${bk}${f.correctional!==null?nx:""}</div>`}
     else if(page.id==="op24hr"){h+=`<p class="q-title">24-hour operation</p><p class="q-sub">Will the facility operate 24 hours per day?</p><div class="radio-row">${r2("op24hr",f.op24hr)}</div><div class="btn-row">${bk}${f.op24hr!==null?nx:""}</div>`}
     else if(page.id==="overnight"){h+=`<p class="q-title">Overnight stays</p><p class="q-sub">Are overnight stays part of the operational model?</p><div class="radio-row">${r2("overnight",f.overnight)}</div><div class="btn-row">${bk}${f.overnight!==null?nx:""}</div>`}
@@ -318,22 +314,14 @@ function render(){
       h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
     }
     else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No group living or human services uses are permitted in the <strong>${esc(f.zone)}</strong> zone district.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application (if available).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
-    else if(page.id==="licensing"){h+=`<p class="q-title">Licensing and certification</p><p class="q-sub">Can the operator obtain all required state licensing or certification? (§ 7.3.107)</p><div class="radio-row">${r3("licensing",f.licensing)}</div><div class="btn-row">${bk}${f.licensing!==null?nx:""}</div>`}
     else if(page.id==="correctional"){h+=`<p class="q-title">Correctional supervision population</p><p class="q-sub">Will the facility serve persons under correctional supervision (parolees, probationers, court-ordered placement)?</p><div class="radio-row">${r2("correctional",f.correctional)}</div><div class="field-help">Correctional populations are NOT FHA-protected \u2014 facility must use GLR pathway, not HSE. (§ 7.6.301)</div><div class="btn-row">${bk}${f.correctional!==null?nx:""}</div>`}
     else if(page.id==="cosFHA"){
       if(f.correctional==="yes"){h+=`<p class="q-title">FHA-protected population</p><p class="q-sub">Correctional supervision populations are not FHA-protected. The facility will use Group Living Residence (GLR) pathways only.</p>`;h+=`<div class="info-box">GLR pathway auto-selected. HSE pathways will be marked not viable.</div>`;h+=`<div class="btn-row">${bk}${nx}</div>`}
-      else{h+=`<p class="q-title">FHA-protected population</p><p class="q-sub">Are all residents members of a Fair Housing Act protected class? (developmentally disabled, mentally ill, elderly, physically disabled/handicapped, or persons in drug/alcohol treatment)</p><div class="radio-row">${r3("fhaProtected",f.fhaProtected)}</div>`;h+=`<div class="field-help">FHA-protected \u2192 Human Services Establishment (HSE). Not protected \u2192 Group Living Residence (GLR). Different zone eligibility. (§ 7.6.301)</div>`;h+=`<div class="btn-row">${bk}${f.fhaProtected!==null?nx:""}</div>`}
+      else{h+=`<p class="q-title">FHA-protected population</p><p class="q-sub">Are all residents members of a Fair Housing Act protected class? (developmentally disabled, mentally ill, elderly, physically disabled/handicapped, or persons in drug/alcohol treatment)</p><div class="radio-row">${r2("fhaProtected",f.fhaProtected)}</div>`;h+=`<div class="field-help">FHA-protected \u2192 Human Services Establishment (HSE). Not protected \u2192 Group Living Residence (GLR). Different zone eligibility. (§ 7.6.301)</div>`;h+=`<div class="btn-row">${bk}${f.fhaProtected!==null?nx:""}</div>`}
     }
     else if(page.id==="cosFBZ"){h+=`<p class="q-title">FBZ regulating plan</p><p class="q-sub">Does the FBZ regulating plan permit group living or human services establishment uses?</p><div class="radio-row">${r3("fbzPermits",f.fbzPermits)}</div><div class="field-help">FBZ eligibility is per the applicable regulating plan (§ 7.3.102E).</div><div class="btn-row">${bk}${f.fbzPermits!==null?nx:""}</div>`}
     else if(page.id==="cosPDZ"){h+=`<p class="q-title">PDZ Land Use Plan</p><p class="q-sub">Does the approved PDZ Land Use Plan include group living or HSE uses? Note: HSE Small is permitted in all PDZ residential/mixed-use portions. (§ 7.2.704(3))</p><div class="radio-row">${r3("pdzPermits",f.pdzPermits)}</div><div class="btn-row">${bk}${f.pdzPermits!==null?nx:""}</div>`}
     else if(page.id==="op24hr"){h+=`<p class="q-title">24-hour operation</p><p class="q-sub">Will the facility operate 24 hours per day?</p><div class="radio-row">${r2("op24hr",f.op24hr)}</div><div class="btn-row">${bk}${f.op24hr!==null?nx:""}</div>`}
-    else if(page.id==="cosPopulation"){
-      h+=`<p class="q-title">Target population</p><p class="q-sub">Select any that apply to determine eligibility for specialized use categories.</p>`;
-      h+=`<div style="margin-bottom:12px;"><label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 0;cursor:pointer;"><input type="checkbox" ${f.targetOver60==="yes"?"checked":""} onchange="ST.form.targetOver60=this.checked?'yes':'no';render()"> Residents exclusively over age 60 (Long-term Care Facility eligibility)</label>`;
-      h+=`<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 0;cursor:pointer;"><input type="checkbox" ${f.targetTerminal==="yes"?"checked":""} onchange="ST.form.targetTerminal=this.checked?'yes':'no';render()"> ≥ 9 terminally ill residents, life expectancy &lt; 6 months (Hospice eligibility)</label>`;
-      h+=`<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 0;cursor:pointer;"><input type="checkbox" ${f.tempShelter==="yes"?"checked":""} onchange="ST.form.tempShelter=this.checked?'yes':'no';render()"> Temporary shelter model, generally unlicensed (Human Services Shelter)</label></div>`;
-      h+=`<div class="btn-row">${bk}${nx}</div>`;
-    }
     else if(page.id==="cosDistance"){
       const autoFac=ST.gisPhase==="done"&&ST.cosAutoNearestFacDist!=null;
       h+=`<p class="q-title">Distance to nearest GLR or Detox Center</p><p class="q-sub">The 1,000-ft separation rule (§ 7.3.301E.1.a) applies to GLR and Detoxification Center uses. Enter distance in feet, or leave blank if unknown.`;
@@ -358,8 +346,28 @@ function render(){
       h+=`<div class="field-help">Conversion of existing single-family/two-family on a platted lot is exempt from Dev Plan (§ 7.5.515B.2.a).</div>`;
       h+=`<div class="btn-row">${bk}${f.constructionType?nx:""}</div>`;
     }
-    else if(page.id==="existingRC"){h+=`<p class="q-title">Existing group living use</p><p class="q-sub">Is there an existing group living or human services use on this lot?</p><div class="radio-row">${r3("existingRC",f.existingRC)}</div><div class="btn-row">${bk}${f.existingRC!==null?nx:""}</div>`}
-    else if(page.id==="maintained"){h+=`<p class="q-title">Continuously maintained?</p><p class="q-sub">Has the existing use been continuously maintained? Discontinuance for 12+ months loses nonconforming status. (§ 7.5.804E)</p><div class="radio-row">${r3("maintained",f.maintained)}</div><div class="btn-row">${bk}${f.maintained!==null?nx:""}</div>`}
+    else if(page.id==="cosPriorUse"){
+      const priorOpts=[["hse","Human Services Establishment (HSE Small/Medium/Large)"],["glr","Group Living Residence (GLR Small/Medium/Large)"],["detox","Detoxification Center"],["none","None of the above"]];
+      h+=`<p class="q-title">Prior use of this property</p><p class="q-sub">Was this property previously operating as any of the following? Select all that apply.</p>`;
+      h+=`<div class="check-row" style="flex-direction:column;gap:6px;">`;
+      priorOpts.forEach(([val,label])=>{
+        const sel=f.cosPriorUses.includes(val);
+        h+=`<button class="check-btn ${sel?"sel":""}" onclick="const a=ST.form.cosPriorUses;${val==="none"?"ST.form.cosPriorUses=['none']":"if(a.includes('none'))ST.form.cosPriorUses=[];const i=a.indexOf('"+val+"');if(i>=0)a.splice(i,1);else a.push('"+val+"')"};render()">${label}</button>`;
+      });
+      h+=`</div>`;
+      h+=`<div class="field-help">Only prior uses that match a current UDC use classification are relevant for nonconforming continuation (§ 7.3.106 / § 7.5.804).</div>`;
+      h+=`<div class="btn-row">${bk}${f.cosPriorUses.length>0?nx:""}</div>`;
+    }
+    else if(page.id==="cosPriorStatus"){
+      h+=`<p class="q-title">Prior use status</p><p class="q-sub">Details about the prior use on this property.</p>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Is the prior use still currently operating?</label><div class="radio-row">${r2("cosPriorStillOperating",f.cosPriorStillOperating)}</div></div>`;
+      if(f.cosPriorStillOperating==="no"){
+        h+=`<div style="margin-bottom:14px;"><label class="field-label">How many months since it stopped operating?</label><input type="number" id="cos-months" value="${f.cosMonthsDiscontinued===null?"":f.cosMonthsDiscontinued}" placeholder="e.g. 6" min="0" style="width:180px;"><div class="field-help">If discontinued for 12+ months, nonconforming status is lost (§ 7.5.804E).</div></div>`;
+      }
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Are you proposing to expand the use beyond its original scope?</label><div class="radio-row">${r2("cosProposedExpansion",f.cosProposedExpansion)}</div></div>`;
+      const canNext=f.cosPriorStillOperating!==null&&(f.cosPriorStillOperating==="yes"||f.cosMonthsDiscontinued!==null||document.getElementById("cos-months"));
+      h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="if(document.getElementById('cos-months')){var v=document.getElementById('cos-months').value;ST.form.cosMonthsDiscontinued=v===''?null:Number(v)}advance()">Next</button></div>`;
+    }
     else if(page.id==="review"){h+=`<p class="q-title">Review and run</p><p class="q-sub">Confirm your inputs, then run the analysis.</p>`;h+=rFacts();h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="go()">Run analysis</button></div>`}
   }
 
@@ -604,7 +612,7 @@ function rFacts(){
   const jurName=ST.jurisdiction==="denver"?"Denver":ST.jurisdiction==="cos"?"Colorado Springs":ST.jurisdiction==="manitou"?"Manitou Springs":"El Paso County";
   const items=[["Jurisdiction",jurName],["Address",esc(f.address)||"\u2014"],["Zone",f.zone||"\u2014"]];
   if(f.lotSize!=null)items.push(["Lot size",f.lotSize.toLocaleString()+" sf"]);
-  items.push(["Licensing",f.licensing||"\u2014"]);
+  // Licensing hardcoded to "yes" — not shown in review
   if(ST.jurisdiction==="denver"){
     items.push(["Correctional",f.correctional||"\u2014"],["24-hour",f.op24hr||"\u2014"],["Overnight",f.overnight||"\u2014"]);
     if(f.religious!=null)items.push(["Religious assembly",f.religious]);
@@ -647,15 +655,16 @@ function rFacts(){
       items.push(["Proposed expansion",f.manProposedExpansion||"\u2014"]);
     }
   } else {
-    items.push(["Correctional",f.correctional||"\u2014"],["FHA-protected",f.fhaProtected||"\u2014"],["24-hour",f.op24hr||"\u2014"]);
-    if(f.targetOver60==="yes")items.push(["Over 60 population","Yes"]);
-    if(f.targetTerminal==="yes")items.push(["Terminal/hospice","Yes"]);
-    if(f.tempShelter==="yes")items.push(["Temporary shelter","Yes"]);
+    items.push(["Correctional",f.correctional||"\u2014"],["FHA-protected",f.fhaProtected||"\u2014"]);
     items.push(["Construction",f.constructionType||"\u2014"]);
     if(f.distGLRDetox!=null)items.push(["Dist. to GLR/Detox",f.distGLRDetox.toLocaleString()+" ft"]);
     if(f.nearestAL==="yes")items.push(["Nearest is AL","Yes"]);
-    items.push(["Existing use",f.existingRC||"\u2014"]);
-    if(f.existingRC==="yes")items.push(["Maintained",f.maintained||"\u2014"]);
+    items.push(["Prior uses",f.cosPriorUses.length?f.cosPriorUses.join(", "):"\u2014"]);
+    if(f.cosPriorUses.length>0&&!f.cosPriorUses.includes("none")){
+      items.push(["Still operating",f.cosPriorStillOperating||"\u2014"]);
+      if(f.cosPriorStillOperating==="no"&&f.cosMonthsDiscontinued!=null)items.push(["Months discontinued",String(f.cosMonthsDiscontinued)]);
+      items.push(["Proposed expansion",f.cosProposedExpansion||"\u2014"]);
+    }
     if(f.cosOverlays?.length)items.push(["Overlays",f.cosOverlays.join(", ")]);
   }
   items.push(["Engine verified",ENGINE_VERIFIED[ST.jurisdiction]||"\u2014"]);
