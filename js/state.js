@@ -17,7 +17,7 @@ function createDefaultForm(){
     manClinicalDetox:null,manMATDispensing:null,manMedManagement:null,
     manNursing24hr:null,manOtherMedical:null,
     manOvernightBeds:null,manProvidesPersonalCare:null,
-    manPreexistingUse:null,manMonthsDiscontinued:null,manProposedExpansion:null,
+    manPriorUses:[],manPriorStillOperating:null,manMonthsDiscontinued:null,manProposedExpansion:null,
     manNaturalHazard:null,manHistoricDistrict:null,manConstructionScope:null,
     manDwellingUnitSqft:null
   },FORM_DEFAULTS);

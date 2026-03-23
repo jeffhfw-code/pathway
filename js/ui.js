@@ -96,8 +96,8 @@ function getManitouPages(){
   if(allN){p.push({id:"allNP"});return p}
   p.push({id:"manServices"});
   p.push({id:"manConstruction"});
-  p.push({id:"existingRC"});
-  if(ST.form.existingRC==="yes"){p.push({id:"maintained"});p.push({id:"manPreexisting"})}
+  p.push({id:"manPriorUse"});
+  if(ST.form.manPriorUses.length>0&&!ST.form.manPriorUses.includes("none"))p.push({id:"manPriorStatus"});
   p.push({id:"review"});return p;
 }
 
@@ -564,14 +564,37 @@ function render(){
       h+=`<div class="field-help"><strong>None:</strong> No development plan required. <strong>Minor:</strong> Minor Development Plan — Planning Commission review. <strong>Major:</strong> Major Development Plan — Planning Commission + City Council hearings. The 1,000 sf threshold is the boundary between minor and major.</div>`;
       h+=`<div class="btn-row">${bk}${f.manConstructionScope?nx:""}</div>`;
     }
-    else if(page.id==="existingRC"){h+=`<p class="q-title">Existing group home or BH use</p><p class="q-sub">Is there an existing group home, boarding house, or behavioral health use on this property?</p><div class="radio-row">${r3("existingRC",f.existingRC)}</div><div class="btn-row">${bk}${f.existingRC!==null?nx:""}</div>`}
-    else if(page.id==="maintained"){h+=`<p class="q-title">Continuously maintained?</p><p class="q-sub">Has the existing use been continuously maintained? Discontinuance for 12+ months terminates nonconforming status. (§ 18.40)</p><div class="radio-row">${r3("maintained",f.maintained)}</div><div class="btn-row">${bk}${f.maintained!==null?nx:""}</div>`}
-    else if(page.id==="manPreexisting"){
-      h+=`<p class="q-title">Nonconforming use details</p><p class="q-sub">These determine the nonconforming use pathway analysis.</p>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Months since use discontinued (if any)</label><input type="number" id="man-months" value="${f.manMonthsDiscontinued===null?"":f.manMonthsDiscontinued}" placeholder="0 if currently operating" min="0" style="width:180px;"></div>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Proposing expansion of use?</label><div class="radio-row">${r2("manProposedExpansion",f.manProposedExpansion)}</div></div>`;
-      h+=`<div class="field-help">G-03: Discontinuance for 12+ months terminates nonconforming status. G-04: Expansion of a nonconforming use is prohibited.</div>`;
-      h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="var m=document.getElementById('man-months').value;ST.form.manMonthsDiscontinued=m===''?null:Number(m);advance()">Next</button></div>`;
+    else if(page.id==="manPriorUse"){
+      const priorOpts=[
+        ["group_home","Group home or sober living house"],
+        ["boarding","Boarding house or rooming house"],
+        ["motel","Motel, hotel, or short-term lodging"],
+        ["nursing","Nursing home or assisted living"],
+        ["rehab","Rehab or treatment facility"],
+        ["medical","Medical clinic or hospital"],
+        ["halfway","Halfway house or transitional housing"],
+        ["shelter","Shelter or emergency housing"],
+        ["none","None of the above / vacant / other"]
+      ];
+      h+=`<p class="q-title">Prior use of this property</p><p class="q-sub">What was this property previously used for? Select all that apply.</p>`;
+      h+=`<div class="check-row" style="flex-direction:column;gap:6px;">`;
+      priorOpts.forEach(([val,label])=>{
+        const sel=f.manPriorUses.includes(val);
+        h+=`<button class="check-btn ${sel?"sel":""}" onclick="const a=ST.form.manPriorUses;${val==="none"?"ST.form.manPriorUses=['none']":"if(a.includes('none'))ST.form.manPriorUses=[];const i=a.indexOf('"+val+"');if(i>=0)a.splice(i,1);else a.push('"+val+"')"};render()">${label}</button>`;
+      });
+      h+=`</div>`;
+      h+=`<div class="field-help">This determines whether a legal nonconforming use pathway may be available under § 18.01.7.1. If the property was vacant or had no relevant prior use, select the last option.</div>`;
+      h+=`<div class="btn-row">${bk}${f.manPriorUses.length>0?nx:""}</div>`;
+    }
+    else if(page.id==="manPriorStatus"){
+      h+=`<p class="q-title">Prior use status</p><p class="q-sub">Details about the prior use on this property.</p>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Is the prior use still currently operating?</label><div class="radio-row">${r2("manPriorStillOperating",f.manPriorStillOperating)}</div></div>`;
+      if(f.manPriorStillOperating==="no"){
+        h+=`<div style="margin-bottom:14px;"><label class="field-label">How many months since it stopped operating?</label><input type="number" id="man-months" value="${f.manMonthsDiscontinued===null?"":f.manMonthsDiscontinued}" placeholder="e.g. 6" min="0" style="width:180px;"><div class="field-help">If discontinued for 12+ months, nonconforming status is lost (§ 18.01.7.1(C)).</div></div>`;
+      }
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Are you proposing to expand the scope of the prior use?</label><div class="radio-row">${r2("manProposedExpansion",f.manProposedExpansion)}</div><div class="field-help">More beds, larger building, or new services beyond the original scope. Expansion of a nonconforming use is prohibited (§ 18.01.7.1(B)).</div></div>`;
+      const canAdvance=f.manPriorStillOperating!==null&&f.manProposedExpansion!==null&&(f.manPriorStillOperating==="yes"||f.manMonthsDiscontinued!==null);
+      h+=`<div class="btn-row">${bk}${canAdvance?`<button class="btn-primary" onclick="if(ST.form.manPriorStillOperating==='no'){var m=document.getElementById('man-months');if(m)ST.form.manMonthsDiscontinued=m.value===''?null:Number(m.value)}else{ST.form.manMonthsDiscontinued=0}advance()">Next</button>`:""}</div>`;
     }
     else if(page.id==="review"){h+=`<p class="q-title">Review and run</p><p class="q-sub">Confirm your inputs, then run the analysis.</p>`;h+=rFacts();h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="go()">Run analysis</button></div>`}
   }
@@ -622,10 +645,10 @@ function rFacts(){
     items.push(["Flood hazard",f.manNaturalHazard==="yes"?"Yes (FEMA)":f.manNaturalHazard==="no"?"No (FEMA)":"Unknown"]);
     items.push(["Historic district",f.manHistoricDistrict==="yes"?"Yes (NPS)":f.manHistoricDistrict==="no"?"No (NPS)":"Unknown"]);
     items.push(["Construction",f.manConstructionScope||"\u2014"]);
-    items.push(["Existing use",f.existingRC||"\u2014"]);
-    if(f.existingRC==="yes"){
-      items.push(["Maintained",f.maintained||"\u2014"]);
-      if(f.manMonthsDiscontinued!=null)items.push(["Months discontinued",String(f.manMonthsDiscontinued)]);
+    items.push(["Prior uses",f.manPriorUses.length?f.manPriorUses.join(", "):"\u2014"]);
+    if(f.manPriorUses.length>0&&!f.manPriorUses.includes("none")){
+      items.push(["Still operating",f.manPriorStillOperating||"\u2014"]);
+      if(f.manPriorStillOperating==="no"&&f.manMonthsDiscontinued!=null)items.push(["Months discontinued",String(f.manMonthsDiscontinued)]);
       items.push(["Proposed expansion",f.manProposedExpansion||"\u2014"]);
     }
   } else {

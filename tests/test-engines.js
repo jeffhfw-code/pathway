@@ -43,7 +43,7 @@ function baseForm(overrides){
     manClinicalDetox:"no",manMATDispensing:"no",manMedManagement:"no",
     manNursing24hr:"no",manOtherMedical:"no",manOvernightBeds:"yes",
     manProvidesPersonalCare:"no",
-    manPreexistingUse:"no",manMonthsDiscontinued:null,manProposedExpansion:"no",
+    manPriorUses:["none"],manPriorStillOperating:null,manMonthsDiscontinued:null,manProposedExpansion:"no",
     manNaturalHazard:"no",manHistoricDistrict:"no",manConstructionScope:"none",
     manDwellingUnitSqft:null
   },overrides);
@@ -800,28 +800,28 @@ endSuite();
 
 suite("Manitou — Nonconforming Use");
 
-test("Preexisting + not discontinued = viable",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",maintained:"yes",manMonthsDiscontinued:0}));
+test("Prior use still operating = viable",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPriorUses:["motel"],manPriorStillOperating:"yes",manMonthsDiscontinued:0}));
   const nc=r.results.find(p=>p.id==="NC");
   assertEqual(nc.v,"yes","NC should be viable");
 });
 
 test("G-03: discontinued > 12 months = blocked",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",manMonthsDiscontinued:15}));
+  const r=runManitouEngine(baseForm({zone:"GR",manPriorUses:["group_home"],manPriorStillOperating:"no",manMonthsDiscontinued:15}));
   const nc=r.results.find(p=>p.id==="NC");
   assertEqual(nc.v,"no");
   assert(nc.stops.some(s=>s.msg.includes("discontinued")));
 });
 
 test("G-04: proposed expansion = blocked",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",manProposedExpansion:"yes",manMonthsDiscontinued:0}));
+  const r=runManitouEngine(baseForm({zone:"GR",manPriorUses:["rehab"],manPriorStillOperating:"yes",manProposedExpansion:"yes",manMonthsDiscontinued:0}));
   const nc=r.results.find(p=>p.id==="NC");
   assertEqual(nc.v,"no");
   assert(nc.stops.some(s=>s.msg.includes("Enlargement")));
 });
 
-test("No preexisting use = blocked",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"no",existingRC:"no"}));
+test("No prior use = blocked",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPriorUses:["none"]}));
   const nc=r.results.find(p=>p.id==="NC");
   assertEqual(nc.v,"no");
 });

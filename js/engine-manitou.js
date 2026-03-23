@@ -28,14 +28,19 @@ function runManitouEngine(f){
   const hasTreatment=detox==="yes"||mat==="yes"||otherMed==="yes";
   // Derived: any medical services (gates Medical Care Facility)
   const hasMedServices=detox==="yes"||mat==="yes"||nursing24==="yes"||otherMed==="yes";
-  const preexist=f.manPreexistingUse;    // yes/no/unknown
+  // Derived from prior use checklist
+  const priorUses=f.manPriorUses||[];
+  const hasPriorUse=priorUses.length>0&&!priorUses.includes("none");
+  const priorOperating=f.manPriorStillOperating; // yes/no
   const monthsDisc=f.manMonthsDiscontinued;
   const expansion=f.manProposedExpansion; // yes/no
   const hazard=f.manNaturalHazard;       // yes/no/unknown
   const historic=f.manHistoricDistrict;  // yes/no/unknown
   const scope=f.manConstructionScope;    // none/minor/major
   const duSqft=f.manDwellingUnitSqft;
-  const exRC=f.existingRC,mnt=f.maintained;
+  // exRC/maintained derived from prior use fields
+  const exRC=hasPriorUse?"yes":"no";
+  const mnt=hasPriorUse?(priorOperating==="yes"?"yes":priorOperating==="no"?"no":"unknown"):"no";
 
   const R=[],gS=[],gC=[];
 
@@ -358,7 +363,7 @@ function runManitouEngine(f){
   // ──── 9. LEGAL NONCONFORMING USE CONTINUATION ───────────────
   const pNC={id:"NC",nm:"Legal Nonconforming Use Continuation",th:"Lawfully established before LUDC (March 1, 2023); continuously maintained",v:"no",mg:null,stops:[],cav:[...gC],proc:"No approval required",rat:"",wf:[],rsk:{},rank:""};
 
-  if(preexist==="yes"||(exRC==="yes")){
+  if(hasPriorUse){
     // G-03: Discontinuance
     if(monthsDisc!=null&&monthsDisc>=12){
       pNC.stops.push({msg:"Use discontinued for "+monthsDisc+" months (≥ 12) — nonconforming status lost. Only conforming uses may resume.",cite:"§ 18.01.7.1(C)"});
@@ -391,14 +396,6 @@ function runManitouEngine(f){
       pNC.rank="Best (if applicable)";
       pNC.wf=[...WF_NC];
     }
-  } else if(preexist==="unknown"||exRC==="unknown"){
-    pNC.v="no";
-    pNC.rat="Preexisting use status unknown — requires verification.";
-    pNC.cav.push({msg:"Verify whether this use was lawfully established before March 1, 2023 (LUDC effective date, § 18.01.1.2).",cite:"§ 18.01.7.1",blocking:true,resolve:"Research with Planning Department and property records."});
-    pNC.stops.push({msg:"Preexisting use status unknown — cannot confirm nonconforming status.",cite:"§ 18.01.7.1"});
-    pNC.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};
-    pNC.rank="Investigate";
-    pNC.wf=[{t:"Research history with Planning Department"},{t:"Confirm lawfully established status and continuous operation"}];
   } else {
     pNC.stops.push({msg:"No preexisting legal use established on property.",cite:"§ 18.01.7.1"});
   }
