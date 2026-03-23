@@ -40,9 +40,10 @@ function baseForm(overrides){
     targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],
     distGLRDetox:99999,nearestAL:"no",
     epcSexOffender:"no",epcNonprofit:"no",epcSeparation:null,epcCadO:"none",
-    manOnSiteTreatment:"no",manPopulationType:"behavioral",manOvernightBeds:"yes",
-    manProvidesMedCare:"no",manProvidesPersonalCare:"no",manFullTimeNursing:"no",
-    manPreexistingUse:"no",manMonthsDiscontinued:null,manProposedExpansion:"no",
+    manClinicalDetox:"no",manMATDispensing:"no",manMedManagement:"no",
+    manNursing24hr:"no",manOtherMedical:"no",manOvernightBeds:"yes",
+    manProvidesPersonalCare:"no",
+    manPriorUses:["none"],manPriorStillOperating:null,manMonthsDiscontinued:null,manProposedExpansion:"no",
     manNaturalHazard:"no",manHistoricDistrict:"no",manConstructionScope:"none",
     manDwellingUnitSqft:null
   },overrides);
@@ -146,8 +147,8 @@ test("Licensing=unknown creates blocking caveat",()=>{
   const r=runEngine(baseForm({zone:"S-MX-3",licensing:"unknown"}));
   assertEqual(r.p2,"pass");
   const p1=r.results.find(p=>p.id==="P1");
-  assertEqual(p1.v,"conditional","should be conditional");
-  assert(p1.cav.some(c=>c.msg.includes("Licensing status unknown")),"should have licensing caveat");
+  assertEqual(p1.v,"no","blocking caveat = not viable");
+  assert(p1.stops.some(s=>s.msg.includes("Licensing status unknown")),"should have licensing stop");
 });
 
 test("Correctional in SU blocks Type 1",()=>{
@@ -170,11 +171,11 @@ test("Type 2 lot size check in SU zone",()=>{
   assert(p2.stops[0].msg.includes("12,000"));
 });
 
-test("Type 2 viable with sufficient lot in SU",()=>{
+test("Type 2 blocked by prior-use caveat when unresolved",()=>{
   const r=runEngine(baseForm({zone:"S-SU-Fx",lotSize:15000}));
   const p2=r.results.find(p=>p.id==="P2");
-  // Should be conditional (prior use caveat), not hard-stopped
-  assert(p2.v!=="no","Type 2 should not be hard-stopped with 15k lot");
+  assertEqual(p2.v,"no","blocking caveat = not viable");
+  assert(p2.stops.some(s=>s.msg.includes("Prior use")),"should have prior use stop");
 });
 
 test("Religious assembly exempts Type 1 from ZP",()=>{
@@ -186,7 +187,7 @@ test("Religious assembly exempts Type 1 from ZP",()=>{
 test("MX zone allows all 4 types + existing",()=>{
   const r=runEngine(baseForm({zone:"S-MX-3"}));
   assertEqual(r.results.length,5);
-  const viable=r.results.filter(p=>p.v==="yes"||p.v==="conditional");
+  const viable=r.results.filter(p=>p.v==="yes");
   assert(viable.length>=4,"at least 4 viable in MX zone");
 });
 
@@ -209,10 +210,10 @@ test("Existing conforming use viable when maintained",()=>{
   assertEqual(p5.v,"yes","existing use should be viable");
 });
 
-test("Existing use conditional when maintenance unknown",()=>{
+test("Existing use blocked when maintenance unknown",()=>{
   const r=runEngine(baseForm({zone:"S-SU-Fx",existingRC:"yes",maintained:"unknown"}));
   const p5=r.results.find(p=>p.id==="P5");
-  assertEqual(p5.v,"conditional");
+  assertEqual(p5.v,"no");
 });
 
 test("Existing use blocked when not maintained",()=>{
@@ -642,28 +643,28 @@ test("GH-SM blocked in OS zone (public zone error)",()=>{
   assert(r.error,"should return error for public zone");
 });
 
-test("G-01: on_site_treatment=yes blocks GH-SM",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manOnSiteTreatment:"yes"}));
+test("G-01: clinical detox blocks GH-SM",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manClinicalDetox:"yes"}));
   const ghSm=r.results.find(p=>p.id==="GH-SM");
-  assertEqual(ghSm.v,"no","treatment blocks GH-SM");
-  assert(ghSm.stops.some(s=>s.msg.includes("medical or psychological treatment")));
+  assertEqual(ghSm.v,"no","detox blocks GH-SM");
+  assert(ghSm.stops.some(s=>s.msg.includes("clinical detox")));
 });
 
-test("G-01: on_site_treatment=unknown creates blocking caveat",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manOnSiteTreatment:"unknown"}));
+test("G-01: MAT dispensing blocks GH-SM",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manMATDispensing:"yes"}));
   const ghSm=r.results.find(p=>p.id==="GH-SM");
-  assertEqual(ghSm.v,"conditional");
-  assert(ghSm.cav.some(c=>c.msg.includes("Classification depends")&&c.blocking));
+  assertEqual(ghSm.v,"no","MAT blocks GH-SM");
+  assert(ghSm.stops.some(s=>s.msg.includes("MAT dispensing")));
 });
 
-test("G-02: general population triggers blocking caveat",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPopulationType:"general"}));
+test("G-01: med management does NOT block GH-SM",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manMedManagement:"yes"}));
   const ghSm=r.results.find(p=>p.id==="GH-SM");
-  assert(ghSm.cav.some(c=>c.msg.includes("FHA-protected")&&c.blocking));
+  assertEqual(ghSm.v,"yes","med management is assistance, not treatment");
 });
 
-test("G-02: behavioral population passes FHA check",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPopulationType:"behavioral"}));
+test("G-02: BH/SUD population passes FHA check",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR"}));
   const ghSm=r.results.find(p=>p.id==="GH-SM");
   assert(ghSm.cav.some(c=>c.msg.includes("qualifies as FHA-protected")&&!c.blocking));
 });
@@ -706,8 +707,8 @@ test("G-12: natural hazard + Permitted = not blocked",()=>{
   assert(ghLg.v!=="no"||!ghLg.stops.some(s=>s.msg.includes("natural hazards")),"hazard should not block by-right pathway");
 });
 
-test("Medical care triggers classification ambiguity caveat",()=>{
-  const r=runManitouEngine(baseForm({zone:"HDR",manProvidesMedCare:"yes"}));
+test("Medical services triggers classification ambiguity caveat",()=>{
+  const r=runManitouEngine(baseForm({zone:"HDR",manClinicalDetox:"yes"}));
   const ghLg=r.results.find(p=>p.id==="GH-LG");
   assert(ghLg.cav.some(c=>c.msg.includes("boundary between Group Home Large and Medical Care")));
 });
@@ -716,21 +717,18 @@ endSuite();
 
 suite("Manitou — Institutional Pathways");
 
-test("LTC permitted in HDR, blocked in GR",()=>{
-  const r1=runManitouEngine(baseForm({zone:"HDR",manFullTimeNursing:"yes"}));
-  const ltc1=r1.results.find(p=>p.id==="LTC");
-  assertEqual(ltc1.v,"yes");
-
-  const r2=runManitouEngine(baseForm({zone:"GR",manFullTimeNursing:"yes"}));
-  const ltc2=r2.results.find(p=>p.id==="LTC");
-  assertEqual(ltc2.v,"no");
-  assert(ltc2.stops.some(s=>s.msg.includes("Not permitted")));
+test("LTC always blocked for BH/SUD population",()=>{
+  const r=runManitouEngine(baseForm({zone:"HDR",manNursing24hr:"yes"}));
+  const ltc=r.results.find(p=>p.id==="LTC");
+  assertEqual(ltc.v,"no","BH/SUD pop blocks LTC");
+  assert(ltc.stops.some(s=>s.msg.includes("unable to live independently")));
 });
 
-test("CCRC permitted in C zone",()=>{
-  const r=runManitouEngine(baseForm({zone:"C",manPopulationType:"elderly"}));
+test("CCRC always blocked for BH/SUD population",()=>{
+  const r=runManitouEngine(baseForm({zone:"C"}));
   const ccrc=r.results.find(p=>p.id==="CCRC");
-  assertEqual(ccrc.v,"yes");
+  assertEqual(ccrc.v,"no","BH/SUD pop blocks CCRC");
+  assert(ccrc.stops.some(s=>s.msg.includes("age-restricted")));
 });
 
 test("MED-OFF: overnight blocks",()=>{
@@ -766,11 +764,11 @@ endSuite();
 
 suite("Manitou — Boarding House");
 
-test("Boarding House: medical care blocks",()=>{
-  const r=runManitouEngine(baseForm({zone:"DWTN",manProvidesMedCare:"yes"}));
+test("Boarding House: medical services blocks",()=>{
+  const r=runManitouEngine(baseForm({zone:"DWTN",manClinicalDetox:"yes"}));
   const bh=r.results.find(p=>p.id==="BOARD");
   assertEqual(bh.v,"no");
-  assert(bh.stops.some(s=>s.msg.includes("medical or personal care")));
+  assert(bh.stops.some(s=>s.msg.includes("medical services")));
 });
 
 test("Boarding House: personal care blocks",()=>{
@@ -780,13 +778,13 @@ test("Boarding House: personal care blocks",()=>{
 });
 
 test("Boarding House: CUP in GR",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manProvidesMedCare:"no",manProvidesPersonalCare:"no"}));
+  const r=runManitouEngine(baseForm({zone:"GR"}));
   const bh=r.results.find(p=>p.id==="BOARD");
   assert(bh.proc.includes("CUP"),"Boarding should require CUP in GR");
 });
 
 test("Boarding House: P in DWTN",()=>{
-  const r=runManitouEngine(baseForm({zone:"DWTN",manProvidesMedCare:"no",manProvidesPersonalCare:"no"}));
+  const r=runManitouEngine(baseForm({zone:"DWTN"}));
   const bh=r.results.find(p=>p.id==="BOARD");
   assert(bh.proc.includes("Permitted"),"Boarding P in DWTN");
 });
@@ -802,28 +800,28 @@ endSuite();
 
 suite("Manitou — Nonconforming Use");
 
-test("Preexisting + not discontinued = viable",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",maintained:"yes",manMonthsDiscontinued:0}));
+test("Prior use still operating = viable",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPriorUses:["motel"],manPriorStillOperating:"yes",manMonthsDiscontinued:0}));
   const nc=r.results.find(p=>p.id==="NC");
-  assert(nc.v==="yes"||nc.v==="conditional","NC should be viable");
+  assertEqual(nc.v,"yes","NC should be viable");
 });
 
 test("G-03: discontinued > 12 months = blocked",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",manMonthsDiscontinued:15}));
+  const r=runManitouEngine(baseForm({zone:"GR",manPriorUses:["group_home"],manPriorStillOperating:"no",manMonthsDiscontinued:15}));
   const nc=r.results.find(p=>p.id==="NC");
   assertEqual(nc.v,"no");
   assert(nc.stops.some(s=>s.msg.includes("discontinued")));
 });
 
 test("G-04: proposed expansion = blocked",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",manProposedExpansion:"yes",manMonthsDiscontinued:0}));
+  const r=runManitouEngine(baseForm({zone:"GR",manPriorUses:["rehab"],manPriorStillOperating:"yes",manProposedExpansion:"yes",manMonthsDiscontinued:0}));
   const nc=r.results.find(p=>p.id==="NC");
   assertEqual(nc.v,"no");
   assert(nc.stops.some(s=>s.msg.includes("Enlargement")));
 });
 
-test("No preexisting use = blocked",()=>{
-  const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"no",existingRC:"no"}));
+test("No prior use = blocked",()=>{
+  const r=runManitouEngine(baseForm({zone:"GR",manPriorUses:["none"]}));
   const nc=r.results.find(p=>p.id==="NC");
   assertEqual(nc.v,"no");
 });
@@ -1200,44 +1198,40 @@ endSuite();
 
 suite("Manitou — Institutional Edge Cases");
 
-test("CCRC with non-elderly population has blocking caveat",()=>{
-  const r=runManitouEngine(baseForm({zone:"C",manPopulationType:"behavioral"}));
+test("CCRC always blocked for BH/SUD (age-restricted)",()=>{
+  const r=runManitouEngine(baseForm({zone:"C"}));
   const ccrc=r.results.find(p=>p.id==="CCRC");
   assert(ccrc,"CCRC should exist");
-  assert(ccrc.cav.some(c=>c.msg.includes("age-restricted")&&c.blocking),"should have age-restricted blocking caveat");
+  assertEqual(ccrc.v,"no","CCRC blocked for BH/SUD");
+  assert(ccrc.stops.some(s=>s.msg.includes("age-restricted")),"should have age-restricted stop");
 });
 
-test("CCRC with elderly population has no age-restriction caveat",()=>{
-  const r=runManitouEngine(baseForm({zone:"C",manPopulationType:"elderly"}));
-  const ccrc=r.results.find(p=>p.id==="CCRC");
-  assert(!ccrc.cav.some(c=>c.msg.includes("age-restricted")&&c.blocking),"no age-restriction blocking caveat for elderly");
-});
-
-test("HC-SUP always has interpretive blocking caveat",()=>{
+test("HC-SUP always blocked (interpretive)",()=>{
   const r=runManitouEngine(baseForm({zone:"C"}));
   const hc=r.results.find(p=>p.id==="HC-SUP");
   assert(hc,"HC-SUP should exist");
-  assert(hc.cav.some(c=>c.msg.includes("Planning Director")&&c.blocking),"should have interpretive blocking caveat");
-  assertEqual(hc.rank,"Moderate (interpretive)","rank should reflect interpretive risk");
+  assertEqual(hc.v,"no","HC-SUP blocked by interpretive caveat");
+  assert(hc.stops.some(s=>s.msg.includes("Planning Director")),"should have interpretive stop");
 });
 
-test("HC-SUP in C zone is Permitted",()=>{
+test("HC-SUP in C zone has Permitted proc",()=>{
   const r=runManitouEngine(baseForm({zone:"C"}));
   const hc=r.results.find(p=>p.id==="HC-SUP");
   assert(hc.proc.includes("Permitted"),"HC-SUP should be Permitted in C zone");
 });
 
-test("MED-CARE with all services=no has blocking caveat",()=>{
-  const r=runManitouEngine(baseForm({zone:"C",manProvidesMedCare:"no",manProvidesPersonalCare:"no",manFullTimeNursing:"no"}));
+test("MED-CARE with no medical services is blocked",()=>{
+  const r=runManitouEngine(baseForm({zone:"C"}));
   const mc=r.results.find(p=>p.id==="MED-CARE");
   assert(mc,"MED-CARE should exist");
-  assert(mc.cav.some(c=>c.msg.includes("medical, surgical, or nursing")&&c.blocking),"should have medical services blocking caveat");
+  assertEqual(mc.v,"no","no medical services = not viable");
+  assert(mc.stops.some(s=>s.msg.includes("No medical services")),"should have medical services stop");
 });
 
-test("MED-CARE with medCare=yes has no medical services caveat",()=>{
-  const r=runManitouEngine(baseForm({zone:"C",manProvidesMedCare:"yes"}));
+test("MED-CARE with detox=yes is viable",()=>{
+  const r=runManitouEngine(baseForm({zone:"C",manClinicalDetox:"yes"}));
   const mc=r.results.find(p=>p.id==="MED-CARE");
-  assert(!mc.cav.some(c=>c.msg.includes("medical, surgical, or nursing")&&c.blocking),"no medical services blocking caveat when medCare=yes");
+  assertEqual(mc.v,"yes","detox enables MED-CARE");
 });
 
 endSuite();

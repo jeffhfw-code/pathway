@@ -12,7 +12,7 @@ function runEngine(f){
   if(f.op24hr==="no")gC.push({msg:"Less-than-24-hour conditions apply",cite:"§ 11.2.8.1.B.3",blocking:false,resolve:"Address in operational plan."});
   if(gS.length)return{zone:z,gS,gC,results:[],p2:"fail"};
 
-  function tP(id,nm,th,tk,fn){const el=ut[tk];if(el==="NP"){R.push({id,nm,th,v:"no",mg:null,stops:[{msg:"Not permitted in "+z,cite:"Use Table"}],cav:[],proc:el,rat:"",wf:[],rsk:{},rank:"Not viable"});return}const pw={id,nm,th,v:"yes",mg:null,stops:[],cav:[...gC],proc:el,rat:"",wf:[],rsk:{},rank:""};fn(pw);if(pw.stops.length)pw.v="no";else if(pw.cav.some(c=>c.blocking))pw.v="conditional";R.push(pw)}
+  function tP(id,nm,th,tk,fn){const el=ut[tk];if(el==="NP"){R.push({id,nm,th,v:"no",mg:null,stops:[{msg:"Not permitted in "+z,cite:"Use Table"}],cav:[],proc:el,rat:"",wf:[],rsk:{},rank:"Not viable"});return}const pw={id,nm,th,v:"yes",mg:null,stops:[],cav:[...gC],proc:el,rat:"",wf:[],rsk:{},rank:""};fn(pw);if(pw.stops.length)pw.v="no";else if(pw.cav.some(c=>c.blocking)){pw.v="no";pw.cav.filter(c=>c.blocking).forEach(c=>pw.stops.push({msg:c.msg,cite:c.cite}))}R.push(pw)}
 
   tP("P1","Type 1","Up to 10 guests","t1",pw=>{
     pw.mg=10;
@@ -76,7 +76,7 @@ function runEngine(f){
 
   const p5={id:"P5",nm:"Existing conforming-use",th:"Established + maintained",v:"no",mg:null,stops:[],cav:[...gC],proc:"No new ZP",rat:"",wf:[],rsk:{},rank:""};
   if(exRC==="yes"&&mnt==="yes"){p5.v="yes";p5.rat="Legally established and maintained. Count frozen.";p5.cav.push({msg:"Count cannot increase",cite:"§ 11.2.8.1.C.1.c",blocking:false,resolve:"Verify with CPD."});p5.rsk={nimby:"Minimal",escalation:"Minimal",timeline:"Immediate",discretion:"None",approval:"Very low"};p5.rank="Best (if applicable)";p5.wf=[{t:"Confirm with CPD"},{t:"Continue within count"}]}
-  else if(exRC==="yes"&&mnt==="unknown"){p5.v="conditional";p5.rat="RC confirmed, maintenance unverified.";p5.cav.push({msg:"Maintenance unconfirmed",cite:"§ 11.2.8.1.C",blocking:true,resolve:"Research via CPD/Assessor."});p5.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};p5.rank="Investigate";p5.wf=[{t:"Research history"},{t:"Confirm with CPD"}]}
+  else if(exRC==="yes"&&mnt==="unknown"){p5.v="no";p5.rat="RC confirmed, maintenance unverified.";p5.stops.push({msg:"Maintenance unconfirmed — cannot verify continuous operation",cite:"§ 11.2.8.1.C"});p5.cav.push({msg:"Maintenance unconfirmed",cite:"§ 11.2.8.1.C",blocking:true,resolve:"Research via CPD/Assessor."});p5.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};p5.rank="Investigate";p5.wf=[{t:"Research history"},{t:"Confirm with CPD"}]}
   else if(exRC==="yes"&&mnt==="no")p5.stops.push({msg:"Not maintained — lapsed",cite:"§ 11.2.8.1.C"});
   else p5.stops.push({msg:"No existing RC use",cite:"§ 11.2.8.1.C"});
   if(p5.stops.length)p5.v="no";R.push(p5);

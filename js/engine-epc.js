@@ -48,7 +48,7 @@ function runEPCEngine(f){
     const pw={id,nm,th,v:"yes",mg:maxRes,stops:[],cav:[...gC],proc:perm,rat:"",wf:[],rsk:{},rank:""};
     fn(pw,perm);
     if(pw.stops.length)pw.v="no";
-    else if(pw.cav.some(c=>c.blocking))pw.v="conditional";
+    else if(pw.cav.some(c=>c.blocking)){pw.v="no";pw.cav.filter(c=>c.blocking).forEach(c=>pw.stops.push({msg:c.msg,cite:c.cite}))}
     R.push(pw);
   }
 
@@ -174,7 +174,7 @@ function runEPCEngine(f){
     }
 
     if(pw.stops.length)pw.v="no";
-    else if(pw.cav.some(c=>c.blocking))pw.v="conditional";
+    else if(pw.cav.some(c=>c.blocking)){pw.v="no";pw.cav.filter(c=>c.blocking).forEach(c=>pw.stops.push({msg:c.msg,cite:c.cite}))}
     R.push(pw);
   }
 
@@ -287,7 +287,8 @@ function runEPCEngine(f){
     pNC.rsk={nimby:"Minimal",escalation:"Minimal",timeline:"Immediate",discretion:"None",approval:"Very low"};pNC.rank="Best (if applicable)";
     pNC.wf=[{t:"Confirm legally established status with PCD"},{t:"Continue operations within existing scope"}];
   } else if(exRC==="yes"&&mnt==="unknown"){
-    pNC.v="conditional";pNC.rat="Existing use confirmed, maintenance unverified.";
+    pNC.v="no";pNC.rat="Existing use confirmed, maintenance unverified.";
+    pNC.stops.push({msg:"Maintenance unconfirmed — cannot verify continuous operation",cite:"§ 5.6.3"});
     pNC.cav.push({msg:"1-year abandonment voids nonconforming status — only conforming uses may resume (§ 5.6.3)",cite:"§ 5.6.3",blocking:true,resolve:"Research via PCD records."});
     pNC.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};pNC.rank="Investigate";
     pNC.wf=[{t:"Research history with PCD"},{t:"Confirm continuous operation"}];

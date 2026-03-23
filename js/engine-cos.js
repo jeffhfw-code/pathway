@@ -40,7 +40,7 @@ function runCOSEngine(f){
     }
     const pw={id,nm,th,v:"yes",mg:maxRes,stops:[],cav:[...gC],proc:perm==="P"?"Admin":"CUP",rat:"",wf:[],rsk:{},rank:""};
     fn(pw,perm);
-    if(pw.stops.length)pw.v="no";else if(pw.cav.some(c=>c.blocking))pw.v="conditional";
+    if(pw.stops.length)pw.v="no";else if(pw.cav.some(c=>c.blocking)){pw.v="no";pw.cav.filter(c=>c.blocking).forEach(c=>pw.stops.push({msg:c.msg,cite:c.cite}))}
     R.push(pw);
   }
 
@@ -270,7 +270,7 @@ function runCOSEngine(f){
   // === Existing conforming use ===
   const pNC={id:"NC",nm:"Existing conforming use",th:"Pre-UDC lawful use",v:"no",mg:null,stops:[],cav:[...gC],proc:"No new app",rat:"",wf:[],rsk:{},rank:""};
   if(exRC==="yes"&&mnt==="yes"){pNC.v="yes";pNC.rat="Previously established, continuously maintained. Per § 7.3.106 / § 7.5.804, deemed to have CUP. May continue and expand within use-specific standards.";pNC.rsk={nimby:"Minimal",escalation:"Minimal",timeline:"Immediate",discretion:"None",approval:"Very low"};pNC.rank="Best (if applicable)";pNC.wf=[{t:"Confirm status with COS Planning"},{t:"Continue operations within existing scope"}]}
-  else if(exRC==="yes"&&mnt==="unknown"){pNC.v="conditional";pNC.rat="Existing use confirmed, maintenance unverified.";pNC.cav.push({msg:"12-month discontinuance voids nonconforming status",cite:"§ 7.5.804E",blocking:true,resolve:"Research via COS Planning."});pNC.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};pNC.rank="Investigate";pNC.wf=[{t:"Research history with COS Planning"},{t:"Confirm continuous operation"}]}
+  else if(exRC==="yes"&&mnt==="unknown"){pNC.v="no";pNC.rat="Existing use confirmed, maintenance unverified.";pNC.stops.push({msg:"Maintenance unconfirmed — cannot verify continuous operation",cite:"§ 7.5.804E"});pNC.cav.push({msg:"12-month discontinuance voids nonconforming status",cite:"§ 7.5.804E",blocking:true,resolve:"Research via COS Planning."});pNC.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};pNC.rank="Investigate";pNC.wf=[{t:"Research history with COS Planning"},{t:"Confirm continuous operation"}]}
   else if(exRC==="yes"&&mnt==="no")pNC.stops.push({msg:"Discontinued 12+ months — nonconforming status lost",cite:"§ 7.5.804E"});
   else pNC.stops.push({msg:"No existing group living use on lot",cite:"§ 7.5.804"});
   if(pNC.stops.length)pNC.v="no";R.push(pNC);

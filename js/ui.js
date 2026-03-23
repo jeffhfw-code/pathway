@@ -94,12 +94,10 @@ function getManitouPages(){
   const ut=MAN_UT[z];if(!ut)return p;
   const allN=Object.values(ut).every(v=>v==="N");
   if(allN){p.push({id:"allNP"});return p}
-  p.push({id:"manTreatment"});
-  p.push({id:"manPopulation"});
-  p.push({id:"manOperations"});
+  p.push({id:"manServices"});
   p.push({id:"manConstruction"});
-  p.push({id:"existingRC"});
-  if(ST.form.existingRC==="yes"){p.push({id:"maintained"});p.push({id:"manPreexisting"})}
+  p.push({id:"manPriorUse"});
+  if(ST.form.manPriorUses.length>0&&!ST.form.manPriorUses.includes("none"))p.push({id:"manPriorStatus"});
   p.push({id:"review"});return p;
 }
 
@@ -541,31 +539,16 @@ function render(){
       h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
     }
     else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No behavioral health or residential care uses are permitted in the <strong>${esc(f.zone)}</strong> zone district. Open Space, Parks, and Public Facilities zones do not allow residential or institutional uses.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application ($1,090).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
-    else if(page.id==="manTreatment"){
-      h+=`<p class="q-title">On-site treatment</p><p class="q-sub">Will the facility provide on-site medical treatment for substance use disorders (SUD)?</p>`;
-      h+=`<div class="radio-row">${r3("manOnSiteTreatment",f.manOnSiteTreatment)}</div>`;
-      h+=`<div class="field-help">On-site treatment (e.g. MAT, detox protocols) disqualifies the Group Home — Small classification, routing to larger or institutional pathways. (G-01)</div>`;
-      h+=`<div class="btn-row">${bk}${f.manOnSiteTreatment!==null?nx:""}</div>`;
-    }
-    else if(page.id==="manPopulation"){
-      h+=`<p class="q-title">Population type</p><p class="q-sub">Select the primary population served.</p>`;
-      h+=`<div class="radio-row">`;
-      ["behavioral","elderly","disabled","mixed"].forEach(v=>{
-        const label=v==="behavioral"?"Behavioral health / SUD":v==="elderly"?"Elderly (age 60+)":v==="disabled"?"Persons with disabilities":"Mixed / other";
-        h+=`<button class="radio-btn ${f.manPopulationType===v?"sel":""}" onclick="ST.form.manPopulationType='${v}';render()">${label}</button>`;
-      });
-      h+=`</div>`;
-      h+=`<div class="field-help">Elderly population enables CCRC pathway. FHA-protected populations (elderly, disabled) have reasonable accommodation rights that may relax certain land-use restrictions. (G-02)</div>`;
-      h+=`<div class="btn-row">${bk}${f.manPopulationType?nx:""}</div>`;
-    }
-    else if(page.id==="manOperations"){
-      h+=`<p class="q-title">Operational characteristics</p><p class="q-sub">These details determine which pathways are available.</p>`;
+    else if(page.id==="manServices"){
+      h+=`<p class="q-title">Services &amp; operations</p><p class="q-sub">Answer each question to determine which use classifications apply.</p>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Clinical detox on-site?</label><div class="radio-row">${r2("manClinicalDetox",f.manClinicalDetox)}</div><div class="field-help">Medically supervised withdrawal management (vitals monitoring, IV fluids, withdrawal medications). Blocks Group Home Small; routes to Medical Care Facility.</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">MAT dispensing on-site?</label><div class="radio-row">${r2("manMATDispensing",f.manMATDispensing)}</div><div class="field-help">Facility directly dispenses controlled substances (e.g., methadone at an OTP). Dispensing is a regulated medical act distinct from medication management. Blocks Group Home Small.</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Medication management on-site?</label><div class="radio-row">${r2("manMedManagement",f.manMedManagement)}</div><div class="field-help">Staff stores, reminds, or observes self-administration of medications prescribed elsewhere. This is assistance, not treatment \u2014 does not block Group Home Small.</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">24-hour nursing on-site?</label><div class="radio-row">${r2("manNursing24hr",f.manNursing24hr)}</div><div class="field-help">Full-time nursing staff providing continuous care.</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Other medical/surgical services on-site?</label><div class="radio-row">${r2("manOtherMedical",f.manOtherMedical)}</div><div class="field-help">Diagnosing, treating, or performing medical/surgical procedures on-site (e.g., wound care, injections, diagnostic testing). Blocks Group Home Small.</div></div>`;
       h+=`<div style="margin-bottom:14px;"><label class="field-label">Overnight beds?</label><div class="radio-row">${r2("manOvernightBeds",f.manOvernightBeds)}</div></div>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Provides medical care?</label><div class="radio-row">${r2("manProvidesMedCare",f.manProvidesMedCare)}</div></div>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Provides personal care (bathing, dressing, ADLs)?</label><div class="radio-row">${r2("manProvidesPersonalCare",f.manProvidesPersonalCare)}</div></div>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Full-time nursing staff?</label><div class="radio-row">${r2("manFullTimeNursing",f.manFullTimeNursing)}</div></div>`;
-      h+=`<div class="field-help">Medical care gates the Medical Care Facility pathway. Personal care gates the Boarding House pathway (excluded if personal care provided). Full-time nursing is required for LTC pathway.</div>`;
-      const allAnswered=f.manOvernightBeds!==null&&f.manProvidesMedCare!==null&&f.manProvidesPersonalCare!==null&&f.manFullTimeNursing!==null;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Personal care (bathing, dressing, ADLs)?</label><div class="radio-row">${r2("manProvidesPersonalCare",f.manProvidesPersonalCare)}</div><div class="field-help">Continuous personal care excludes Boarding House classification.</div></div>`;
+      const allAnswered=f.manClinicalDetox!==null&&f.manMATDispensing!==null&&f.manMedManagement!==null&&f.manNursing24hr!==null&&f.manOtherMedical!==null&&f.manOvernightBeds!==null&&f.manProvidesPersonalCare!==null;
       h+=`<div class="btn-row">${bk}${allAnswered?nx:""}</div>`;
     }
     else if(page.id==="manConstruction"){
@@ -581,14 +564,32 @@ function render(){
       h+=`<div class="field-help"><strong>None:</strong> No development plan required. <strong>Minor:</strong> Minor Development Plan — Planning Commission review. <strong>Major:</strong> Major Development Plan — Planning Commission + City Council hearings. The 1,000 sf threshold is the boundary between minor and major.</div>`;
       h+=`<div class="btn-row">${bk}${f.manConstructionScope?nx:""}</div>`;
     }
-    else if(page.id==="existingRC"){h+=`<p class="q-title">Existing group home or BH use</p><p class="q-sub">Is there an existing group home, boarding house, or behavioral health use on this property?</p><div class="radio-row">${r3("existingRC",f.existingRC)}</div><div class="btn-row">${bk}${f.existingRC!==null?nx:""}</div>`}
-    else if(page.id==="maintained"){h+=`<p class="q-title">Continuously maintained?</p><p class="q-sub">Has the existing use been continuously maintained? Discontinuance for 12+ months terminates nonconforming status. (§ 18.40)</p><div class="radio-row">${r3("maintained",f.maintained)}</div><div class="btn-row">${bk}${f.maintained!==null?nx:""}</div>`}
-    else if(page.id==="manPreexisting"){
-      h+=`<p class="q-title">Nonconforming use details</p><p class="q-sub">These determine the nonconforming use pathway analysis.</p>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Months since use discontinued (if any)</label><input type="number" id="man-months" value="${f.manMonthsDiscontinued===null?"":f.manMonthsDiscontinued}" placeholder="0 if currently operating" min="0" style="width:180px;"></div>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Proposing expansion of use?</label><div class="radio-row">${r2("manProposedExpansion",f.manProposedExpansion)}</div></div>`;
-      h+=`<div class="field-help">G-03: Discontinuance for 12+ months terminates nonconforming status. G-04: Expansion of a nonconforming use is prohibited.</div>`;
-      h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="var m=document.getElementById('man-months').value;ST.form.manMonthsDiscontinued=m===''?null:Number(m);advance()">Next</button></div>`;
+    else if(page.id==="manPriorUse"){
+      const priorOpts=[
+        ["group_home","Group home (small or large)"],
+        ["rehab","Rehab or treatment facility"],
+        ["medical","Medical clinic or hospital"],
+        ["none","None of the above"]
+      ];
+      h+=`<p class="q-title">Prior use of this property</p><p class="q-sub">Was this property previously operating as any of the following before March 1, 2023 (LUDC effective date)? Select all that apply.</p>`;
+      h+=`<div class="check-row" style="flex-direction:column;gap:6px;">`;
+      priorOpts.forEach(([val,label])=>{
+        const sel=f.manPriorUses.includes(val);
+        h+=`<button class="check-btn ${sel?"sel":""}" onclick="const a=ST.form.manPriorUses;${val==="none"?"ST.form.manPriorUses=['none']":"if(a.includes('none'))ST.form.manPriorUses=[];const i=a.indexOf('"+val+"');if(i>=0)a.splice(i,1);else a.push('"+val+"')"};render()">${label}</button>`;
+      });
+      h+=`</div>`;
+      h+=`<div class="field-help">Only prior uses that match a current LUDC use classification are relevant for nonconforming continuation (§ 18.01.7.1). Other prior uses (motel, boarding house, etc.) do not grant nonconforming rights to operate a BH/SUD facility.</div>`;
+      h+=`<div class="btn-row">${bk}${f.manPriorUses.length>0?nx:""}</div>`;
+    }
+    else if(page.id==="manPriorStatus"){
+      h+=`<p class="q-title">Prior use status</p><p class="q-sub">Details about the prior use on this property.</p>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Is the prior use still currently operating?</label><div class="radio-row">${r2("manPriorStillOperating",f.manPriorStillOperating)}</div></div>`;
+      if(f.manPriorStillOperating==="no"){
+        h+=`<div style="margin-bottom:14px;"><label class="field-label">How many months since it stopped operating?</label><input type="number" id="man-months" value="${f.manMonthsDiscontinued===null?"":f.manMonthsDiscontinued}" placeholder="e.g. 6" min="0" style="width:180px;"><div class="field-help">If discontinued for 12+ months, nonconforming status is lost (§ 18.01.7.1(C)).</div></div>`;
+      }
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Are you proposing to expand the scope of the prior use?</label><div class="radio-row">${r2("manProposedExpansion",f.manProposedExpansion)}</div><div class="field-help">More beds, larger building, or new services beyond the original scope. Expansion of a nonconforming use is prohibited (§ 18.01.7.1(B)).</div></div>`;
+      const canAdvance=f.manPriorStillOperating!==null&&f.manProposedExpansion!==null&&(f.manPriorStillOperating==="yes"||f.manMonthsDiscontinued!==null);
+      h+=`<div class="btn-row">${bk}${canAdvance?`<button class="btn-primary" onclick="if(ST.form.manPriorStillOperating==='no'){var m=document.getElementById('man-months');if(m)ST.form.manMonthsDiscontinued=m.value===''?null:Number(m.value)}else{ST.form.manMonthsDiscontinued=0}advance()">Next</button>`:""}</div>`;
     }
     else if(page.id==="review"){h+=`<p class="q-title">Review and run</p><p class="q-sub">Confirm your inputs, then run the analysis.</p>`;h+=rFacts();h+=`<div class="btn-row">${bk}<button class="btn-primary" onclick="go()">Run analysis</button></div>`}
   }
@@ -629,19 +630,20 @@ function rFacts(){
     if(f.manDwellingUnitSqft!=null){items.push(["Building sqft",f.manDwellingUnitSqft.toLocaleString()+" sf"]);const cap=manTitle15Cap(f.manDwellingUnitSqft);if(cap!==null)items.push(["Title 15 cap",cap+" persons"])}
     if(ST.manAutoYearBuilt)items.push(["Year built",String(ST.manAutoYearBuilt)]);
     if(ST.manAutoBeds)items.push(["Bedrooms",String(ST.manAutoBeds)]);
-    items.push(["On-site treatment",f.manOnSiteTreatment||"\u2014"]);
-    items.push(["Population",f.manPopulationType||"\u2014"]);
+    items.push(["Clinical detox",f.manClinicalDetox||"\u2014"]);
+    items.push(["MAT dispensing",f.manMATDispensing||"\u2014"]);
+    items.push(["Med management",f.manMedManagement||"\u2014"]);
+    items.push(["24hr nursing",f.manNursing24hr||"\u2014"]);
+    items.push(["Other medical/surgical",f.manOtherMedical||"\u2014"]);
     items.push(["Overnight beds",f.manOvernightBeds||"\u2014"]);
-    items.push(["Medical care",f.manProvidesMedCare||"\u2014"]);
     items.push(["Personal care",f.manProvidesPersonalCare||"\u2014"]);
-    items.push(["Full-time nursing",f.manFullTimeNursing||"\u2014"]);
     items.push(["Flood hazard",f.manNaturalHazard==="yes"?"Yes (FEMA)":f.manNaturalHazard==="no"?"No (FEMA)":"Unknown"]);
     items.push(["Historic district",f.manHistoricDistrict==="yes"?"Yes (NPS)":f.manHistoricDistrict==="no"?"No (NPS)":"Unknown"]);
     items.push(["Construction",f.manConstructionScope||"\u2014"]);
-    items.push(["Existing use",f.existingRC||"\u2014"]);
-    if(f.existingRC==="yes"){
-      items.push(["Maintained",f.maintained||"\u2014"]);
-      if(f.manMonthsDiscontinued!=null)items.push(["Months discontinued",String(f.manMonthsDiscontinued)]);
+    items.push(["Prior uses",f.manPriorUses.length?f.manPriorUses.join(", "):"\u2014"]);
+    if(f.manPriorUses.length>0&&!f.manPriorUses.includes("none")){
+      items.push(["Still operating",f.manPriorStillOperating||"\u2014"]);
+      if(f.manPriorStillOperating==="no"&&f.manMonthsDiscontinued!=null)items.push(["Months discontinued",String(f.manMonthsDiscontinued)]);
       items.push(["Proposed expansion",f.manProposedExpansion||"\u2014"]);
     }
   } else {
@@ -681,7 +683,7 @@ function go(){
    ═══════════════════════════════════════════════════════════════════ */
 function renderRes(){
   const R=ST.results;if(R.error){APP.innerHTML=`<div style="padding:1rem 0;"><div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">${esc(R.error)}</p><p style="font-size:13px;color:#9B9BA7;margin:0;">The intended use is prohibited under the applicable rules. No viable pathway exists, and continuing the analysis is unnecessary because this result is dispositive.</p></div><div class="btn-row" style="margin-top:16px;"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.results=null;ST.pg=0;render()">Back to inputs</button></div></div>`;return}
-  const vi=R.results.filter(r=>r.v==="yes"||r.v==="conditional"),nv=R.results.filter(r=>r.v==="no");
+  const vi=R.results.filter(r=>r.v==="yes"),nv=R.results.filter(r=>r.v==="no");
   let best=0;vi.forEach(r=>{const n=r.mg===999?9999:(r.mg||0);if(n>best)best=n});
   const bL=best===9999?"No UDC cap":best===0?"\u2014":String(best);
   const viCo=vi; // vi already includes conditional (merged per Bug 7)
@@ -772,7 +774,7 @@ function renderRes(){
 }
 
 function pwC(r){
-  const bc=r.v==="no"?"badge-no":r.v==="conditional"?"badge-cond":"badge-yes",bt=r.v==="no"?"Not Viable":r.v==="conditional"?"Conditional":"Viable";
+  const bc=r.v==="no"?"badge-no":"badge-yes",bt=r.v==="no"?"Not Viable":"Viable";
   let ct="";if(r.v!=="no"){if(r.mg===999)ct="no cap";else if(!r.mg)ct="TBD";else ct="up to "+r.mg+" residents"}
   const isO=ST.expanded[r.id]||false;let d="";
   if(r.v!=="no"){
@@ -870,7 +872,7 @@ function getPathwayDocs(r){
 function doSave(){
   if(!ST.results||ST.results.error)return;
   const R=ST.results;
-  const vi=R.results.filter(r=>r.v==="yes"||r.v==="conditional");
+  const vi=R.results.filter(r=>r.v==="yes");
   let best=0;vi.forEach(r=>{const n=r.mg===999?9999:(r.mg||0);if(n>best)best=n});
   const allC=[];vi.forEach(r=>r.cav.forEach(c=>{if(!allC.find(x=>x.msg===c.msg))allC.push(c)}));
   const blk=allC.filter(c=>c.blocking).length;
@@ -936,9 +938,8 @@ function renderComparison(){
   const rows=[
     ["Jurisdiction",r=>({denver:"Denver",cos:"Colorado Springs",epc:"El Paso County",manitou:"Manitou Springs"})[r.analysis.jurisdiction]],
     ["Zone",r=>r.analysis.zone||"\u2014"],
-    ["Viable",r=>{const n=r.results.error?0:r.results.results.filter(x=>x.v==="yes"||x.v==="conditional").length;return`<span style="color:${n>0?"#4ADE80":"#F09595"};font-weight:600;">${n}</span>`}],
-    ["Max beds",r=>{if(r.results.error)return"\u2014";const vi=r.results.results.filter(x=>x.v==="yes"||x.v==="conditional");let best=0;vi.forEach(x=>{const n=x.mg===999?9999:(x.mg||0);if(n>best)best=n});return best===9999?"No cap":best===0?"\u2014":String(best)}],
-    ["Conditional",r=>r.results.error?"\u2014":String(r.results.results.filter(x=>x.v==="conditional").length)],
+    ["Viable",r=>{const n=r.results.error?0:r.results.results.filter(x=>x.v==="yes").length;return`<span style="color:${n>0?"#4ADE80":"#F09595"};font-weight:600;">${n}</span>`}],
+    ["Max beds",r=>{if(r.results.error)return"\u2014";const vi=r.results.results.filter(x=>x.v==="yes");let best=0;vi.forEach(x=>{const n=x.mg===999?9999:(x.mg||0);if(n>best)best=n});return best===9999?"No cap":best===0?"\u2014":String(best)}],
     ["Blockers",r=>{if(r.results.error)return esc(r.results.error);const stops=r.results.gS||[];return stops.length?stops.map(s=>s.msg).join("; "):"None"}]
   ];
   rows.forEach(([label,fn])=>{
@@ -949,7 +950,7 @@ function renderComparison(){
   h+=`<tr><td style="padding:8px;border-bottom:1px solid #1E1E2E;color:#9B9BA7;vertical-align:top;">Viable pathways</td>`;
   results.forEach(r=>{
     if(r.results.error){h+=`<td style="padding:8px;border-bottom:1px solid #1E1E2E;text-align:center;color:#9B9BA7;">\u2014</td>`;return}
-    const vi=r.results.results.filter(x=>x.v==="yes"||x.v==="conditional").map(x=>x.nm);
+    const vi=r.results.results.filter(x=>x.v==="yes").map(x=>x.nm);
     h+=`<td style="padding:8px;border-bottom:1px solid #1E1E2E;text-align:center;color:#E8E8EC;font-size:11px;">${vi.length?vi.join("<br>"):"\u2014"}</td>`;
   });
   h+=`</tr></tbody></table></div>`;

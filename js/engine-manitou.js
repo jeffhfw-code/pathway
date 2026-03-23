@@ -15,20 +15,32 @@ function runManitouEngine(f){
   if(allN)return{error:"No target use types are permitted in "+z+"."};
 
   // ── Extract form values ──────────────────────────────────────
-  const treat=f.manOnSiteTreatment;     // yes/no/unknown
-  const pop=f.manPopulationType;         // disability/elderly/behavioral/general/unknown
+  const detox=f.manClinicalDetox;        // yes/no
+  const mat=f.manMATDispensing;          // yes/no
+  const medMgmt=f.manMedManagement;      // yes/no
+  const nursing24=f.manNursing24hr;      // yes/no
+  const otherMed=f.manOtherMedical;      // yes/no
   const overnight=f.manOvernightBeds;    // yes/no
-  const medCare=f.manProvidesMedCare;    // yes/no/unknown
-  const persCare=f.manProvidesPersonalCare; // yes/no/unknown
-  const nursing=f.manFullTimeNursing;    // yes/no/unknown
-  const preexist=f.manPreexistingUse;    // yes/no/unknown
+  const persCare=f.manProvidesPersonalCare; // yes/no
+  // Population hardcoded — this tool is for BH/SUD facilities
+  const pop="behavioral";
+  // Derived: any on-site treatment (blocks GH-Small)
+  const hasTreatment=detox==="yes"||mat==="yes"||otherMed==="yes";
+  // Derived: any medical services (gates Medical Care Facility)
+  const hasMedServices=detox==="yes"||mat==="yes"||nursing24==="yes"||otherMed==="yes";
+  // Derived from prior use checklist
+  const priorUses=f.manPriorUses||[];
+  const hasPriorUse=priorUses.length>0&&!priorUses.includes("none");
+  const priorOperating=f.manPriorStillOperating; // yes/no
   const monthsDisc=f.manMonthsDiscontinued;
   const expansion=f.manProposedExpansion; // yes/no
   const hazard=f.manNaturalHazard;       // yes/no/unknown
   const historic=f.manHistoricDistrict;  // yes/no/unknown
   const scope=f.manConstructionScope;    // none/minor/major
   const duSqft=f.manDwellingUnitSqft;
-  const exRC=f.existingRC,mnt=f.maintained;
+  // exRC/maintained derived from prior use fields
+  const exRC=hasPriorUse?"yes":"no";
+  const mnt=hasPriorUse?(priorOperating==="yes"?"yes":priorOperating==="no"?"no":"unknown"):"no";
 
   const R=[],gS=[],gC=[];
 
@@ -111,23 +123,21 @@ function runManitouEngine(f){
     const pw={id,nm,th,v:"yes",mg:maxOcc,stops:[],cav:[...gC],proc:perm==="P"?"Permitted (P)":"Conditional Use (C)",rat:"",wf:[],rsk:{},rank:""};
     fn(pw,perm);
     if(pw.stops.length)pw.v="no";
-    else if(pw.cav.some(c=>c.blocking))pw.v="conditional";
+    else if(pw.cav.some(c=>c.blocking)){pw.v="no";pw.cav.filter(c=>c.blocking).forEach(c=>pw.stops.push({msg:c.msg,cite:c.cite}))}
     R.push(pw);
   }
 
   // ──── 1. GROUP HOME, SMALL (≤ 8 persons) ────────────────────
   tP("GH-SM","Group Home, Small","≤ 8 persons; no on-site treatment; FHA-protected population","ghSmall",8,(pw,perm)=>{
     // G-01: No on-site medical/psychological treatment
-    if(treat==="yes"){
-      pw.stops.push({msg:"On-site medical or psychological treatment is provided — cannot classify as Group Home, Small. Physical assistance with daily living is permitted, but treatment is not.",cite:"§ 18.04.4.4(A)"});
+    if(hasTreatment){
+      const svcs=[];if(detox==="yes")svcs.push("clinical detox");if(mat==="yes")svcs.push("MAT dispensing");if(otherMed==="yes")svcs.push("medical/surgical services");
+      pw.stops.push({msg:"On-site treatment provided ("+svcs.join(", ")+") — cannot classify as Group Home, Small. Physical assistance and medication management are permitted, but treatment is not.",cite:"§ 18.04.4.4(A)"});
       return;
     }
-    if(treat==="unknown")pw.cav.push({msg:"Classification depends on whether on-site medical or psychological treatment is provided. If treatment is provided, Group Home Small is not available — reclassify to Group Home Large, LTC, or Medical Care Facility.",cite:"§ 18.04.4.4(A)",blocking:true,resolve:"Determine whether clinical treatment will be provided on-site."});
 
-    // G-02: FHA-protected population
-    if(pop==="general")pw.cav.push({msg:"Group Home classification requires FHA-protected population within C.R.S. § 31-23-303 scope (developmentally disabled, aged 60+, behavioral/mental health disorders). General population may not qualify.",cite:"Table 18.04.2.5-1, footnote 1",blocking:true,resolve:"Confirm population meets FHA-protected definition."});
-    else if(pop==="unknown")pw.cav.push({msg:"Population type unknown — Group Home requires FHA-protected population per C.R.S. § 31-23-303.",cite:"Table 18.04.2.5-1, footnote 1",blocking:true,resolve:"Identify target population."});
-    else pw.cav.push({msg:"BH/SUD population qualifies as FHA-protected under C.R.S. § 31-23-303 — persons with behavioral or mental health disorders are explicitly included.",cite:"C.R.S. § 31-23-303",blocking:false});
+    // G-02: FHA-protected population — BH/SUD qualifies
+    pw.cav.push({msg:"BH/SUD population qualifies as FHA-protected under C.R.S. § 31-23-303 — persons with behavioral or mental health disorders are explicitly included.",cite:"C.R.S. § 31-23-303",blocking:false});
 
     // Title 15 cap
     t15Cav(pw);
@@ -148,16 +158,14 @@ function runManitouEngine(f){
 
   // ──── 2. GROUP HOME, LARGE (> 8 persons) ────────────────────
   tP("GH-LG","Group Home, Large","> 8 persons; includes secure residential treatment centers","ghLarge",999,(pw,perm)=>{
-    // G-02: FHA-protected population
-    if(pop==="general")pw.cav.push({msg:"Group Home classification requires FHA-protected population per C.R.S. § 31-23-303. General population may not qualify.",cite:"Table 18.04.2.5-1, footnote 1",blocking:true,resolve:"Confirm population meets FHA-protected definition."});
-    else if(pop==="unknown")pw.cav.push({msg:"Population type unknown — Group Home requires FHA-protected population per C.R.S. § 31-23-303.",cite:"Table 18.04.2.5-1, footnote 1",blocking:true,resolve:"Identify target population."});
-    else pw.cav.push({msg:"BH/SUD population qualifies as FHA-protected under C.R.S. § 31-23-303.",cite:"C.R.S. § 31-23-303",blocking:false});
+    // G-02: FHA-protected population — BH/SUD qualifies
+    pw.cav.push({msg:"BH/SUD population qualifies as FHA-protected under C.R.S. § 31-23-303.",cite:"C.R.S. § 31-23-303",blocking:false});
 
     // Classification note: GH-LG includes treatment
     pw.cav.push({msg:"Group Home Large definition includes 'secure residential treatment center' (§ 18.04.4.3(A)(1)). On-site treatment is permitted under this classification.",cite:"§ 18.04.4.3",blocking:false});
 
     // Unknown #1: GH-LG vs Medical Care Facility boundary
-    if(medCare==="yes")pw.cav.push({msg:"Facility provides medical care — boundary between Group Home Large and Medical Care Facility is interpretive. If medical/surgical/nursing services are the primary function, Medical Care Facility (§ 18.04.16.3) may be the required classification. Zone eligibility differs significantly.",cite:"§ 18.04.2.3",blocking:true,resolve:"Request Planning Director interpretation per § 18.04.2.3."});
+    if(hasMedServices)pw.cav.push({msg:"Facility provides medical services — boundary between Group Home Large and Medical Care Facility is interpretive. If medical/surgical/nursing services are the primary function, Medical Care Facility (§ 18.04.16.3) may be the required classification. Zone eligibility differs significantly.",cite:"§ 18.04.2.3",blocking:true,resolve:"Request Planning Director interpretation per § 18.04.2.3."});
 
     // Title 15 cap
     t15Cav(pw);
@@ -188,9 +196,11 @@ function runManitouEngine(f){
 
   // ──── 3. LONG-TERM CARE FACILITY ────────────────────────────
   tP("LTC","Long-Term Care Facility","Full-time nursing; persons unable to live independently","ltc",999,(pw,perm)=>{
-    // Requires full-time nursing
-    if(nursing==="no")pw.cav.push({msg:"LTC requires full-time nursing assistance for persons who cannot live independently. If nursing is not full-time, consider Group Home Large or Medical Care Facility.",cite:"§ 18.04.4.2",blocking:true,resolve:"Confirm operational model includes full-time nursing."});
-    else if(nursing==="unknown")pw.cav.push({msg:"Full-time nursing status unknown — LTC classification requires full-time nursing for persons unable to live independently.",cite:"§ 18.04.4.2",blocking:true,resolve:"Determine nursing staffing model."});
+    // LTC is for persons unable to live independently — BH/SUD populations do not fit
+    pw.cav.push({msg:"LTC is defined as housing for persons 'who are unable to live independently' and require full-time nursing. BH/SUD populations are generally able to live independently and do not fit the LTC definition. Consider Group Home or Medical Care Facility instead.",cite:"§ 18.04.4.2",blocking:true});
+
+    // Requires 24-hour nursing
+    if(nursing24==="no")pw.cav.push({msg:"LTC requires full-time nursing assistance for persons who cannot live independently.",cite:"§ 18.04.4.2",blocking:true});
 
     // Title 15 cap
     t15Cav(pw);
@@ -211,8 +221,8 @@ function runManitouEngine(f){
 
   // ──── 4. CONTINUING CARE RETIREMENT COMMUNITY ───────────────
   tP("CCRC","Continuing Care Retirement Community","Continuum of residential + health care; FHA-compliant; age-restricted","ccrc",999,(pw,perm)=>{
-    // Population check — CCRC is typically age-restricted
-    if(pop!=="elderly"&&pop!=="unknown")pw.cav.push({msg:"CCRC is typically an age-restricted (60+) continuum-of-care campus. A non-elderly population may not fit the CCRC definition, which requires 'meeting provisions of federal and state Fair Housing laws' for age-restricted communities.",cite:"§ 18.04.4.1",blocking:true,resolve:"Verify population is appropriate for CCRC model."});
+    // CCRC is age-restricted — BH/SUD population does not fit
+    pw.cav.push({msg:"CCRC is an age-restricted (60+) continuum-of-care campus. BH/SUD populations do not fit the CCRC definition.",cite:"§ 18.04.4.1",blocking:true});
 
     // Title 15 cap
     t15Cav(pw);
@@ -284,9 +294,9 @@ function runManitouEngine(f){
 
   // ──── 7. MEDICAL CARE FACILITY ──────────────────────────────
   tP("MED-CARE","Medical Care Facility","Diagnose/treat for 2+ persons; includes hospitals, rehab, detox","medCare",999,(pw,perm)=>{
-    // Broadest medical pathway — includes inpatient
-    if(medCare==="no"&&persCare==="no"&&nursing==="no"){
-      pw.cav.push({msg:"Medical Care Facility requires medical, surgical, or nursing services for 2+ non-related persons. If no medical/nursing care is provided, consider Group Home classification instead.",cite:"§ 18.04.16.3",blocking:true,resolve:"Confirm operational model includes medical services."});
+    // Broadest medical pathway — requires medical services
+    if(!hasMedServices){
+      pw.cav.push({msg:"Medical Care Facility requires medical, surgical, or nursing services for 2+ non-related persons. No medical services indicated (detox, MAT, nursing, or other medical/surgical). Consider Group Home classification instead.",cite:"§ 18.04.16.3",blocking:true});
     }
 
     if(perm==="P"){
@@ -317,11 +327,11 @@ function runManitouEngine(f){
   // ──── 8. BOARDING HOUSE ─────────────────────────────────────
   tP("BOARD","Boarding House","4–12 persons; meals; ≥ 30 days; no medical or personal care","boarding",12,(pw,perm)=>{
     // BH-01: No continuous medical or personal care
-    if(medCare==="yes"||persCare==="yes"){
-      pw.stops.push({msg:"Boarding House definition excludes continuous medical or personal care. Cannot classify as Boarding House if medical care or personal care is provided.",cite:"§ 18.04.5.2(A)"});
+    if(hasMedServices||persCare==="yes"){
+      const reasons=[];if(hasMedServices)reasons.push("medical services");if(persCare==="yes")reasons.push("personal care");
+      pw.stops.push({msg:"Boarding House definition excludes continuous medical or personal care. Cannot classify as Boarding House ("+reasons.join(" and ")+" provided).",cite:"§ 18.04.5.2(A)"});
       return;
     }
-    if(medCare==="unknown"||persCare==="unknown")pw.cav.push({msg:"Boarding House excludes continuous medical or personal care. If any medical or personal care services are provided, this pathway is not available.",cite:"§ 18.04.5.2(A)",blocking:true,resolve:"Confirm no medical or personal care will be provided."});
 
     pw.cav.push({msg:"Boarding House is a negative boundary for most behavioral health operations. May be viable for a sober living house with meals but no treatment or personal care services. Edge case — see Unknown #2.",cite:"§ 18.04.5.2",blocking:false});
 
@@ -353,12 +363,12 @@ function runManitouEngine(f){
   // ──── 9. LEGAL NONCONFORMING USE CONTINUATION ───────────────
   const pNC={id:"NC",nm:"Legal Nonconforming Use Continuation",th:"Lawfully established before LUDC (March 1, 2023); continuously maintained",v:"no",mg:null,stops:[],cav:[...gC],proc:"No approval required",rat:"",wf:[],rsk:{},rank:""};
 
-  if(preexist==="yes"||(exRC==="yes")){
+  if(hasPriorUse){
     // G-03: Discontinuance
     if(monthsDisc!=null&&monthsDisc>=12){
       pNC.stops.push({msg:"Use discontinued for "+monthsDisc+" months (≥ 12) — nonconforming status lost. Only conforming uses may resume.",cite:"§ 18.01.7.1(C)"});
     } else if(monthsDisc!=null&&monthsDisc>0&&monthsDisc<12){
-      pNC.v="conditional";
+      pNC.v="yes";
       pNC.cav.push({msg:"Use discontinued for "+monthsDisc+" months — nonconforming status still valid but at risk. 12-month discontinuance terminates status.",cite:"§ 18.01.7.1(C)",blocking:false});
     } else if(monthsDisc==null){
       pNC.cav.push({msg:"Months discontinued unknown — verify that the prior use has not been discontinued for 12+ months.",cite:"§ 18.01.7.1(C)",blocking:true,resolve:"Research continuity with Planning Department records."});
@@ -379,19 +389,13 @@ function runManitouEngine(f){
     pNC.cav.push({msg:"If structure damaged > 50% of GFA, may rebuild to prior dimensions only (no expansion). Building permits within 12 months. Historic District contributing resources must follow Historic District Design Guidelines.",cite:"§ 18.01.7.1(D)–(E)",blocking:false});
 
     if(!pNC.stops.length){
-      pNC.v=pNC.cav.some(c=>c.blocking)?"conditional":"yes";
+      if(pNC.cav.some(c=>c.blocking)){pNC.v="no";pNC.cav.filter(c=>c.blocking).forEach(c=>pNC.stops.push({msg:c.msg,cite:c.cite}))}
+      else pNC.v="yes";
       pNC.rat="Lawfully established use that does not conform to current LUDC. Deemed CUP if CUP would now be required. Use may continue within original scope. No enlargement. 12-month discontinuance terminates status.";
       pNC.rsk={nimby:"Minimal",escalation:"None",timeline:"Immediate",discretion:"None",approval:"Very low",fee:"$0"};
       pNC.rank="Best (if applicable)";
       pNC.wf=[...WF_NC];
     }
-  } else if(preexist==="unknown"||exRC==="unknown"){
-    pNC.v="conditional";
-    pNC.rat="Preexisting use status unknown — requires verification.";
-    pNC.cav.push({msg:"Verify whether this use was lawfully established before March 1, 2023 (LUDC effective date, § 18.01.1.2).",cite:"§ 18.01.7.1",blocking:true,resolve:"Research with Planning Department and property records."});
-    pNC.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};
-    pNC.rank="Investigate";
-    pNC.wf=[{t:"Research history with Planning Department"},{t:"Confirm lawfully established status and continuous operation"}];
   } else {
     pNC.stops.push({msg:"No preexisting legal use established on property.",cite:"§ 18.01.7.1"});
   }
