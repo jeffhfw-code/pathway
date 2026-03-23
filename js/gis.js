@@ -97,7 +97,7 @@ async function autoDetectStart(){
       // runFn internally does searching→querying→done
       await winner.runFn(winner.candidates[0],signal);
     }else{
-      // EPC/Manitou candidates have different shape — normalize for disambig
+      // Normalize EPC/Manitou Esri candidates for disambig display + select
       if(winner.key==="epc"||winner.key==="manitou"){
         ST.gisAddresses=winner.candidates.map(c=>({addr:c.attributes.Match_addr,x:c.location.x,y:c.location.y,score:c.score}));
       }else{
@@ -610,4 +610,13 @@ async function manGisRun(candidate,signal){
 }
 
 function manGisStart(){gisUnifiedStart("manAddrInput",manFindCandidates,manGisRun,"Manitou Springs")}
-function manGisSelect(idx){gisUnifiedSelect(idx,manGisRun)}
+async function manGisSelect(idx){
+  const signal=gisNewAbort();
+  setGisPhase("searching");setGisPhase("querying");render();
+  try{
+    const a=ST.gisAddresses[idx];
+    // Reconstruct Esri candidate format from normalized disambig object
+    const candidate=a.location?a:{location:{x:a.x,y:a.y},attributes:{Match_addr:a.addr,StAddr:a.addr}};
+    await manGisRun(candidate,signal);
+  }catch(err){if(err.name==="AbortError")return;setGisPhase("error");ST.gisError="Layer query failed: "+(err.message||err)+". You can skip and enter data manually.";render()}
+}
