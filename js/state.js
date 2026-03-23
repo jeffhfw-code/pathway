@@ -9,8 +9,8 @@ function createDefaultForm(){
     distType34:null,op24hr:null,overnight:null,licensing:null,
     // COS-specific
     fhaProtected:null,constructionType:null,fbzPermits:null,pdzPermits:null,
-    targetOver60:null,targetTerminal:null,tempShelter:null,cosOverlays:[],
-    distGLRDetox:null,nearestAL:null,
+    cosOverlays:[],distGLRDetox:null,nearestAL:null,
+    cosPriorUses:[],cosPriorStillOperating:null,cosMonthsDiscontinued:null,cosProposedExpansion:null,
     // EPC-specific
     epcSexOffender:null,epcNonprofit:null,epcSeparation:null,epcCadO:null,
     // Manitou Springs-specific
@@ -123,6 +123,11 @@ function validateFormBeforeEngine(){
     const r=validateNumeric(f.manMonthsDiscontinued,"Months discontinued",0,999);
     if(!r.valid)errors.push(r.error);
     else f.manMonthsDiscontinued=r.value;
+  }
+  if(f.cosMonthsDiscontinued!==null){
+    const r=validateNumeric(f.cosMonthsDiscontinued,"Months discontinued",0,999);
+    if(!r.valid)errors.push(r.error);
+    else f.cosMonthsDiscontinued=r.value;
   }
   return errors;
 }

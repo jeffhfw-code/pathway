@@ -1,25 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════════
    COLORADO SPRINGS RULE ENGINE
    Dependencies: config.js (COS_UT, COS_ZL)
+   Population: hardcoded BH/SUD (behavioral health / substance use disorder)
    ═══════════════════════════════════════════════════════════════════ */
 
 function runCOSEngine(f){
   const z=f.zone,ut=COS_UT[z];if(!ut)return{error:"Zone not found."};
   const cor=f.correctional==="yes";
   const fha=cor?false:(f.fhaProtected==="yes");
-  const fhaUnk=!cor&&f.fhaProtected==="unknown";
-  const lic=f.licensing;
+  // FHA is yes/no only (no "unknown" — user must resolve before proceeding)
   const distRaw=f.distGLRDetox;
   const dist=distRaw!=null?distRaw:999999;
   const distUnknown=distRaw==null;
   const alException=f.nearestAL==="yes";
-  const exRC=f.existingRC,mnt=f.maintained;
+  // Prior-use checklist for NC pathway
+  const priorUses=f.cosPriorUses||[];
+  const hasPriorUse=priorUses.length>0&&!priorUses.includes("none");
+  const priorOperating=f.cosPriorStillOperating;
+  const monthsDisc=f.cosMonthsDiscontinued;
+  const expansion=f.cosProposedExpansion;
   const R=[],gS=[],gC=[];
 
-  // Pass 2 — General rules
-  if(lic==="no")gS.push({msg:"Cannot obtain state licensing/certification",cite:"§ 7.3.107"});
-  if(lic==="unknown")gC.push({msg:"Licensing status unknown",cite:"§ 7.3.107",blocking:true,resolve:"Confirm with state licensing agency."});
-  if(gS.length)return{zone:z,gS,gC,results:[],p2:"fail"};
+  // Licensing hardcoded — BH/SUD operators always have state licensing
+  // (FORM_DEFAULTS sets licensing:"yes"; no wizard page shown)
 
   // Manager referral risk — applies to all admin pathways
   const mgrCav={msg:"Manager may refer to Planning Commission (§ 7.5.408)",cite:"§ 7.5.408",blocking:false,resolve:"Cannot be eliminated; flag as escalation risk."};
@@ -97,11 +100,8 @@ function runCOSEngine(f){
   const noClockCav={msg:"No statutory review deadline — COS timelines are targets, not maximums (unlike Denver's 180-day Exec. Order 151)",cite:"CPD Development Process",blocking:false};
 
   // === HSE pathways (FHA-protected only) ===
-  if(fha||fhaUnk){
-    const fhaLabel=fhaUnk?" (FHA status unconfirmed)":"";
-
-    tP("HSE-S","HSE Small"+fhaLabel,"≤ 8 residents","hseS",8,(pw,perm)=>{
-      if(fhaUnk)pw.cav.push({msg:"FHA-protected status unconfirmed — if not FHA, must use GLR",cite:"§ 7.6.301",blocking:true,resolve:"Confirm population FHA status."});
+  if(fha){
+    tP("HSE-S","HSE Small","≤ 8 residents","hseS",8,(pw,perm)=>{
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
       pw.rat="HSE Small permitted in "+z+". Up to 8 residents. No separation rule. Admin permit ($175).";
       pw.proc="Admin permit";
@@ -110,8 +110,7 @@ function runCOSEngine(f){
       pw.rank="Easiest pathway";
     });
 
-    tP("HSE-M","HSE Medium"+fhaLabel,"9–15 residents","hseM",15,(pw,perm)=>{
-      if(fhaUnk)pw.cav.push({msg:"FHA status unconfirmed",cite:"§ 7.6.301",blocking:true,resolve:"Confirm population FHA status."});
+    tP("HSE-M","HSE Medium","9–15 residents","hseM",15,(pw,perm)=>{
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
       const isCUP=perm==="C";
       pw.proc=isCUP?"CUP + Dev Plan":"Admin + Dev Plan";
@@ -125,8 +124,7 @@ function runCOSEngine(f){
       }
     });
 
-    tP("HSE-L","HSE Large"+fhaLabel,"≥ 16 residents (no cap)","hseL",999,(pw,perm)=>{
-      if(fhaUnk)pw.cav.push({msg:"FHA status unconfirmed",cite:"§ 7.6.301",blocking:true,resolve:"Confirm population FHA status."});
+    tP("HSE-L","HSE Large","≥ 16 residents (no cap)","hseL",999,(pw,perm)=>{
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
       const isCUP=perm==="C";
       pw.proc=isCUP?"CUP + Dev Plan":"Admin + Dev Plan";
@@ -144,15 +142,12 @@ function runCOSEngine(f){
   // Separation check — hoisted so all pathways (GLR, DETOX, etc.) can access it
   const sepApplies=dist<1000&&!alException;
 
-  // === GLR pathways (non-FHA or unknown) ===
+  // === GLR pathways (non-FHA) ===
   const distUnkCav=distUnknown?{msg:"Distance to nearest GLR/Detox facility unknown — 1,000-ft separation rule (§ 7.3.301E.1.a) cannot be verified. Measure before filing.",cite:"§ 7.3.301E.1.a",blocking:true,resolve:"Measure straight-line distance to nearest GLR or Detox facility."}:null;
-  if(!fha||fhaUnk){
-    const glrLabel=fhaUnk?" (if not FHA-protected)":"";
-
-    tP("GLR-S","GLR Small"+glrLabel,"≤ 8 residents","glrS",8,(pw,perm)=>{
-      if(fhaUnk)pw.cav.push({msg:"If population IS FHA-protected, use HSE instead",cite:"§ 7.6.301",blocking:false});
+  if(!fha){
+    tP("GLR-S","GLR Small","≤ 8 residents","glrS",8,(pw,perm)=>{
       if(sepApplies){pw.stops.push({msg:"Within 1,000 ft of GLR/Detox ("+Math.round(dist).toLocaleString()+" ft)",cite:"§ 7.3.301E.1.a"});return}
-      if(dist<1000&&alException)pw.cav.push({msg:"AL exception applied — verify both are AL-licensed",cite:"§ 7.3.301E.1.b",blocking:true,resolve:"Confirm with COS Planning."});
+      if(dist<1000&&alException)pw.cav.push({msg:"AL exception applied — verify both proposed and existing facility hold AL licenses (§ 7.3.301E.1.b). GIS detected nearest facility as AL-licensed; confirm proposed facility also qualifies.",cite:"§ 7.3.301E.1.b",blocking:false});
       if(distUnkCav)pw.cav.push(distUnkCav);
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
       const isCUP=perm==="C";
@@ -167,10 +162,9 @@ function runCOSEngine(f){
       }
     });
 
-    tP("GLR-M","GLR Medium"+glrLabel,"9–15 residents","glrM",15,(pw,perm)=>{
-      if(fhaUnk)pw.cav.push({msg:"If FHA-protected, use HSE instead",cite:"§ 7.6.301",blocking:false});
+    tP("GLR-M","GLR Medium","9–15 residents","glrM",15,(pw,perm)=>{
       if(sepApplies){pw.stops.push({msg:"Within 1,000 ft of GLR/Detox",cite:"§ 7.3.301E.1.a"});return}
-      if(dist<1000&&alException)pw.cav.push({msg:"AL exception — verify both AL-licensed",cite:"§ 7.3.301E.1.b",blocking:true,resolve:"Confirm with COS Planning."});
+      if(dist<1000&&alException)pw.cav.push({msg:"AL exception applied — verify both facilities hold AL licenses",cite:"§ 7.3.301E.1.b",blocking:false});
       if(distUnkCav)pw.cav.push(distUnkCav);
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
       const isCUP=perm==="C";
@@ -185,10 +179,9 @@ function runCOSEngine(f){
       }
     });
 
-    tP("GLR-L","GLR Large"+glrLabel,"≥ 16 residents (no cap)","glrL",999,(pw,perm)=>{
-      if(fhaUnk)pw.cav.push({msg:"If FHA-protected, use HSE instead",cite:"§ 7.6.301",blocking:false});
+    tP("GLR-L","GLR Large","≥ 16 residents (no cap)","glrL",999,(pw,perm)=>{
       if(sepApplies){pw.stops.push({msg:"Within 1,000 ft of GLR/Detox",cite:"§ 7.3.301E.1.a"});return}
-      if(dist<1000&&alException)pw.cav.push({msg:"AL exception — verify both AL-licensed",cite:"§ 7.3.301E.1.b",blocking:true,resolve:"Confirm with COS Planning."});
+      if(dist<1000&&alException)pw.cav.push({msg:"AL exception applied — verify both facilities hold AL licenses",cite:"§ 7.3.301E.1.b",blocking:false});
       if(distUnkCav)pw.cav.push(distUnkCav);
       pw.cav.push(mgrCav);pw.cav.push(noClockCav);
       const isCUP=perm==="C";
@@ -216,63 +209,34 @@ function runCOSEngine(f){
     pw.rsk={nimby:"Very high",escalation:"High",timeline:"3–6 months",discretion:"Significant",approval:"High",fee:"$1,445 + $1,520+/acre"};pw.rank="Very Hard";
   });
 
-  // === Hospice ===
-  if(f.targetTerminal==="yes"){
-    tP("HOSPICE","Hospice","≥ 9 terminal, < 6 months","hospice",999,(pw,perm)=>{
-      pw.cav.push(noClockCav);
-      const isCUP=perm==="C";
-      pw.proc=isCUP?"CUP":"Admin";
-      pw.rat="Hospice in "+z+". ≥9 terminally ill, state licensed, 24-hour palliative.";
-      if(isCUP){
-        pw.wf=[...WF_CUP];
-        pw.rsk={nimby:"Low–Medium",escalation:"Low",timeline:"3–5 months",discretion:"Moderate",approval:"Low–Medium",fee:"$1,445 + $1,520+/acre"};pw.rank="Moderate";
-      } else {
-        pw.wf=[...WF_ADMIN_SIMPLE];
-        pw.rsk={nimby:"Very low",escalation:"Low",timeline:"1–3 months",discretion:"Low",approval:"Low",fee:"$175"};pw.rank="Good";
-      }
-    });
-  }
+  // === Population-gated pathways — always Not Viable for BH/SUD ===
+  R.push({id:"HOSPICE",nm:"Hospice",th:"≥ 9 terminal, < 6 months",v:"no",mg:null,stops:[{msg:"BH/SUD population — hospice requires terminal diagnosis with < 6 month life expectancy",cite:"Table 7.3.2-A"}],cav:[],proc:"N/A",rat:"Hospice is for terminally ill populations, not behavioral health or substance use disorder.",wf:[],rsk:{},rank:"Not viable"});
+  R.push({id:"LTC",nm:"Long-term Care Facility",th:"Persons over 60",v:"no",mg:null,stops:[{msg:"BH/SUD population — Long-term Care requires residents exclusively over age 60",cite:"Table 7.3.2-A"}],cav:[],proc:"N/A",rat:"LTC serves elderly populations (60+), not behavioral health or substance use disorder.",wf:[],rsk:{},rank:"Not viable"});
+  R.push({id:"SHELTER",nm:"Human Services Shelter",th:"Temporary group lodging",v:"no",mg:null,stops:[{msg:"BH/SUD population — Human Services Shelter is temporary group lodging without treatment programming",cite:"Table 7.3.2-A"}],cav:[],proc:"N/A",rat:"HS Shelter provides temporary lodging only, not structured BH/SUD treatment.",wf:[],rsk:{},rank:"Not viable"});
 
-  // === Long-term Care Facility ===
-  if(f.targetOver60==="yes"){
-    tP("LTC","Long-term Care Facility","Persons over 60","ltc",999,(pw,perm)=>{
-      pw.cav.push(noClockCav);
-      const isCUP=perm==="C";
-      pw.proc=isCUP?"CUP":"Admin";
-      pw.rat="LTC in "+z+". Persons over 60, lodging/meals for compensation.";
-      if(isCUP){
-        pw.wf=[...WF_CUP_NODEV];
-        pw.rsk={nimby:"Low",escalation:"Low",timeline:"3–5 months",discretion:"Moderate",approval:"Low–Medium",fee:"$1,445"};pw.rank="Moderate";
-      } else {
-        pw.wf=[...WF_ADMIN_SIMPLE];
-        pw.rsk={nimby:"Very low",escalation:"Low",timeline:"1–3 months",discretion:"Low",approval:"Low",fee:"$175"};pw.rank="Good";
-      }
-    });
-  }
-
-  // === Human Services Shelter ===
-  if(f.tempShelter==="yes"){
-    tP("SHELTER","Human Services Shelter","Temporary group lodging","shelter",999,(pw,perm)=>{
-      pw.cav.push(noClockCav);
-      const isCUP=perm==="C";
-      pw.proc=isCUP?"CUP":"Admin";
-      pw.rat="HS Shelter in "+z+". Temporary group lodging, generally unlicensed.";
-      if(isCUP){
-        pw.wf=[...WF_CUP];
-        pw.rsk={nimby:"High",escalation:"High",timeline:"3–5+ months",discretion:"Significant",approval:"Medium–High",fee:"$1,445"};pw.rank="Hard";
-      } else {
-        pw.wf=[...WF_ADMIN_SIMPLE];
-        pw.rsk={nimby:"Medium",escalation:"Medium",timeline:"1–3 months",discretion:"Moderate",approval:"Medium",fee:"$175"};pw.rank="Moderate";
-      }
-    });
-  }
-
-  // === Existing conforming use ===
+  // === Existing conforming use (NC) — prior-use checklist ===
   const pNC={id:"NC",nm:"Existing conforming use",th:"Pre-UDC lawful use",v:"no",mg:null,stops:[],cav:[...gC],proc:"No new app",rat:"",wf:[],rsk:{},rank:""};
-  if(exRC==="yes"&&mnt==="yes"){pNC.v="yes";pNC.rat="Previously established, continuously maintained. Per § 7.3.106 / § 7.5.804, deemed to have CUP. May continue and expand within use-specific standards.";pNC.rsk={nimby:"Minimal",escalation:"Minimal",timeline:"Immediate",discretion:"None",approval:"Very low"};pNC.rank="Best (if applicable)";pNC.wf=[{t:"Confirm status with COS Planning"},{t:"Continue operations within existing scope"}]}
-  else if(exRC==="yes"&&mnt==="unknown"){pNC.v="no";pNC.rat="Existing use confirmed, maintenance unverified.";pNC.stops.push({msg:"Maintenance unconfirmed — cannot verify continuous operation",cite:"§ 7.5.804E"});pNC.cav.push({msg:"12-month discontinuance voids nonconforming status",cite:"§ 7.5.804E",blocking:true,resolve:"Research via COS Planning."});pNC.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};pNC.rank="Investigate";pNC.wf=[{t:"Research history with COS Planning"},{t:"Confirm continuous operation"}]}
-  else if(exRC==="yes"&&mnt==="no")pNC.stops.push({msg:"Discontinued 12+ months — nonconforming status lost",cite:"§ 7.5.804E"});
-  else pNC.stops.push({msg:"No existing group living use on lot",cite:"§ 7.5.804"});
+  if(hasPriorUse&&priorOperating==="yes"){
+    pNC.v="yes";
+    pNC.rat="Previously established ("+priorUses.join(", ")+"), continuously maintained. Per § 7.3.106 / § 7.5.804, deemed to have CUP. May continue within use-specific standards.";
+    pNC.rsk={nimby:"Minimal",escalation:"Minimal",timeline:"Immediate",discretion:"None",approval:"Very low"};
+    pNC.rank="Best (if applicable)";
+    pNC.wf=[{t:"Confirm legally established status with COS Planning"},{t:"Continue operations within existing scope"}];
+    if(expansion==="yes")pNC.cav.push({msg:"Proposed expansion — verify expansion is within use-specific standards. Enlargement beyond original scope may require new application.",cite:"§ 7.5.804",blocking:false});
+  }
+  else if(hasPriorUse&&priorOperating==="no"&&monthsDisc!=null&&monthsDisc>=12){
+    pNC.stops.push({msg:"Discontinued 12+ months ("+monthsDisc+" months) — nonconforming status lost",cite:"§ 7.5.804E"});
+  }
+  else if(hasPriorUse&&priorOperating==="no"&&monthsDisc!=null&&monthsDisc<12){
+    pNC.stops.push({msg:"Discontinued "+monthsDisc+" months — at risk of losing nonconforming status at 12 months",cite:"§ 7.5.804E"});
+    pNC.rat="Prior use discontinued less than 12 months. Nonconforming status may still be preserved if use resumes before the 12-month deadline.";
+  }
+  else if(hasPriorUse&&priorOperating==="no"){
+    pNC.stops.push({msg:"Discontinuance period unknown — verify with COS Planning whether 12-month window has lapsed",cite:"§ 7.5.804E"});
+  }
+  else{
+    pNC.stops.push({msg:"No existing group living use on lot",cite:"§ 7.5.804"});
+  }
   if(pNC.stops.length)pNC.v="no";R.push(pNC);
 
   return{zone:z,gS,gC,results:R,p2:"pass"};

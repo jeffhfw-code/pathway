@@ -1,0 +1,19 @@
+# Claude Code
+.claude/
+
+# Node/npm (preemptive — no build step, but prevents accidental commits)
+node_modules/
+package.json
+package-lock.json
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor artifacts
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
