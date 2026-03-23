@@ -58,6 +58,61 @@ async function gisUnifiedSelect(idx,runFn){
 
 function gisSkip(){setGisPhase("skipped");render()}
 
+/* ── Auto-detect jurisdiction from address ─────────────────────── */
+const AUTO_DETECT_JURISDICTIONS=[
+  {key:"manitou",findFn:manFindCandidates,runFn:manGisRun,label:"Manitou Springs"},
+  {key:"cos",findFn:cosFindAddresses,runFn:cosGisRun,label:"Colorado Springs"},
+  {key:"denver",findFn:gisFindAddresses,runFn:gisRunWithAddress,label:"Denver"},
+  {key:"epc",findFn:epcFindCandidates,runFn:epcGisRun,label:"El Paso County"}
+];
+
+async function autoDetectStart(){
+  const el=document.getElementById("auto-addr");
+  if(!el)return;
+  const raw=el.value.trim();
+  if(!raw)return;
+  const signal=gisNewAbort();
+  ST.autoDetectPhase="searching";ST.autoDetectError=null;render();
+  try{
+    const results=await Promise.allSettled(
+      AUTO_DETECT_JURISDICTIONS.map(j=>j.findFn(raw,signal).then(c=>({...j,candidates:c})))
+    );
+    if(signal.aborted)return;
+    // Pick highest-priority jurisdiction that returned results (order: Manitou > COS > Denver > EPC)
+    let winner=null;
+    for(const r of results){
+      if(r.status==="fulfilled"&&r.value.candidates.length>0){winner=r.value;break}
+    }
+    if(!winner){
+      ST.autoDetectPhase="error";
+      ST.autoDetectError="No matching address found in any supported jurisdiction. Check spelling or try selecting a jurisdiction manually.";
+      render();return;
+    }
+    // Set jurisdiction and transition to its address page with GIS data
+    ST.autoDetectPhase=null;
+    ST.jurisdiction=winner.key;resetState(true);ST.pg=0;
+    ST.form.address=raw;
+    setGisPhase("searching");
+    if(winner.candidates.length===1){
+      // runFn internally does searching→querying→done
+      await winner.runFn(winner.candidates[0],signal);
+    }else{
+      // EPC/Manitou candidates have different shape — normalize for disambig
+      if(winner.key==="epc"||winner.key==="manitou"){
+        ST.gisAddresses=winner.candidates.map(c=>({addr:c.attributes.Match_addr,x:c.location.x,y:c.location.y,score:c.score}));
+      }else{
+        ST.gisAddresses=winner.candidates;
+      }
+      setGisPhase("disambig");render();
+    }
+  }catch(err){
+    if(err.name==="AbortError")return;
+    ST.autoDetectPhase="error";
+    ST.autoDetectError="Address lookup failed: "+(err.message||err)+". Try selecting a jurisdiction manually.";
+    render();
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    DENVER GIS
    ═══════════════════════════════════════════════════════════════════ */
