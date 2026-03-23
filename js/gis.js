@@ -519,19 +519,34 @@ async function manGisRun(candidate,signal){
   const origAddr=ST.form.address; // preserve user-typed address as fallback
   try{
     const geom=`${lon},${lat}`;
-    // Step 1: Query EPC parcel layer (MUST pass inSR=4326 for WGS84 coordinates)
-    const parcelUrl=`${EPC_GIS_PARCEL}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=PARCEL,HYPERLINK,Shape.STArea()&returnGeometry=false&f=json`;
-    const parcelRes=await fetch(parcelUrl,{signal});const parcelData=await parcelRes.json();
+    // Step 1: Query parcel + zoning + FEMA + NPS in parallel
+    const parcelUrl=`${EPC_GIS_PARCEL}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=PARCEL,HYPERLINK&returnGeometry=false&f=json`;
+    const zoningUrl=`${MAN_ZONING}?geometry=${encodeURIComponent(geom)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=Zoning_Abr&returnGeometry=false&f=json`;
+    const [parcelRes,zoningRes]=await Promise.all([
+      fetch(parcelUrl,{signal}),
+      fetch(zoningUrl,{signal}).catch(e=>{if(e.name==="AbortError")throw e;return null})
+    ]);
+    const parcelData=await parcelRes.json();
+    const zoningData=zoningRes?await zoningRes.json():null;
     let parcel=null;
     if(parcelData.features?.length===1)parcel=parcelData.features[0].attributes;
-    else if(parcelData.features?.length>1)parcel=parcelData.features.map(f=>f.attributes).sort((a,b)=>(b["Shape.STArea()"]||0)-(a["Shape.STArea()"]||0))[0];
+    else if(parcelData.features?.length>1)parcel=parcelData.features[0].attributes;
 
     const parcelId=parcel?parcel.PARCEL:null;
     const assessorLink=parcel?parcel.HYPERLINK:null;
     ST.manAutoParcelId=parcelId;
     ST.manAutoAssessorLink=assessorLink;
 
-    // Step 2: Call Spatialest record card API
+    // Resolve zone from GIS zoning layer (primary) — normalize abbreviations
+    let gisZone=null;
+    if(zoningData?.features?.length){
+      let abr=zoningData.features[0].attributes.Zoning_Abr||"";
+      abr=abr.replace(/\*$/,""); // strip trailing asterisk (e.g. HLDR* → HLDR)
+      if(abr==="PRK")abr="P"; // GIS uses PRK, engine uses P
+      if(MAN_ZL.includes(abr))gisZone=abr;
+    }
+
+    // Step 2: Call Spatialest record card API (building data + fallback zone)
     let spa={zone:null,sqft:null,yearBuilt:null,beds:null,baths:null,lotSize:null,buildingUse:null};
     if(parcelId){
       try{
@@ -539,6 +554,9 @@ async function manGisRun(candidate,signal){
         if(spaRes.ok){const spaData=await spaRes.json();spa=parseSpatialest(spaData)}
       }catch(e){if(e.name==="AbortError")throw e;console.warn("Spatialest lookup failed:",e)}
     }
+
+    // Use GIS zoning layer as primary zone source, Spatialest as fallback
+    const resolvedZone=gisZone||spa.zone;
 
     // Step 3: Query FEMA NFHL for flood hazard
     let hazardStatus="unknown";
@@ -563,7 +581,7 @@ async function manGisRun(candidate,signal){
     }catch(e){if(e.name==="AbortError")throw e;console.warn("NPS Historic Districts lookup failed:",e)}
 
     // Store auto-determined values in state
-    ST.manAutoZone=spa.zone;
+    ST.manAutoZone=resolvedZone;
     ST.manAutoBuildingSqft=spa.sqft;
     ST.manAutoYearBuilt=spa.yearBuilt;
     ST.manAutoLotSize=spa.lotSize;
@@ -573,15 +591,15 @@ async function manGisRun(candidate,signal){
     ST.manAutoBuildingUse=spa.buildingUse;
 
     // Auto-populate form fields
-    if(spa.zone&&MAN_ZL.includes(spa.zone))ST.form.zone=spa.zone;
+    if(resolvedZone&&MAN_ZL.includes(resolvedZone))ST.form.zone=resolvedZone;
     if(spa.sqft)ST.form.manDwellingUnitSqft=spa.sqft;
     if(spa.lotSize)ST.form.lotSize=spa.lotSize;
     ST.form.manNaturalHazard=hazardStatus;
     ST.form.manHistoricDistrict=historicStatus;
     // Address: use StAddr (has number) or fall back to user input
     ST.form.address=displayAddr||origAddr;
-    ST.gisData={matchedAddr:displayAddr||origAddr,lat,lon,parcelId,assessorLink,autoZone:spa.zone,autoLot:spa.lotSize};
-    ST.gisAutoZone=spa.zone;
+    ST.gisData={matchedAddr:displayAddr||origAddr,lat,lon,parcelId,assessorLink,autoZone:resolvedZone,autoLot:spa.lotSize};
+    ST.gisAutoZone=resolvedZone;
     ST.gisAutoLot=spa.lotSize;
     setGisPhase("done");render();
   }catch(err){

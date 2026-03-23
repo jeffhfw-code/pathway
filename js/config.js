@@ -210,6 +210,7 @@ const NPS_HISTORIC="https://services1.arcgis.com/4yjifSiIG17F0gW5/arcgis/rest/se
    ═══════════════════════════════════════════════════════════════════ */
 const MAN_GEOCODE=EPC_GEOCODE; // reuse world geocoder
 const MAN_BBOX="-104.940,38.830,-104.890,38.870";
+const MAN_ZONING="https://services6.arcgis.com/JvLU4FaQtqrjGWfU/arcgis/rest/services/Manitou_Springs_Zoning_Districts_April_2025/FeatureServer/0/query";
 const MAN_ZMAP="https://comsgov.maps.arcgis.com/apps/instant/interactivelegend/index.html?appid=a352048fe74549378e417e5b0aa3f733";
 
 const MAN_ZL=["GR","LDR","HDR","HLDR","DWTN","C","MUC","OS","P","PF"];
