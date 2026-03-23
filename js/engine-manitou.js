@@ -164,8 +164,8 @@ function runManitouEngine(f){
     // Classification note: GH-LG includes treatment
     pw.cav.push({msg:"Group Home Large definition includes 'secure residential treatment center' (§ 18.04.4.3(A)(1)). On-site treatment is permitted under this classification.",cite:"§ 18.04.4.3",blocking:false});
 
-    // Unknown #1: GH-LG vs Medical Care Facility boundary
-    if(hasMedServices)pw.cav.push({msg:"Facility provides medical services — boundary between Group Home Large and Medical Care Facility is interpretive. If medical/surgical/nursing services are the primary function, Medical Care Facility (§ 18.04.16.3) may be the required classification. Zone eligibility differs significantly.",cite:"§ 18.04.2.3",blocking:true,resolve:"Request Planning Director interpretation per § 18.04.2.3."});
+    // Unknown #1: GH-LG vs Medical Care Facility boundary — interpretive, not blocking
+    if(hasMedServices)pw.cav.push({msg:"Facility provides medical services — boundary between Group Home Large and Medical Care Facility is interpretive. The Planning Department may determine that medical/surgical/nursing services as the primary function requires classification as Medical Care Facility (§ 18.04.16.3) instead. Zone eligibility differs significantly.",cite:"§ 18.04.2.3",blocking:false});
 
     // Title 15 cap
     t15Cav(pw);
