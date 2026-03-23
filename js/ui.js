@@ -566,24 +566,19 @@ function render(){
     }
     else if(page.id==="manPriorUse"){
       const priorOpts=[
-        ["group_home","Group home or sober living house"],
-        ["boarding","Boarding house or rooming house"],
-        ["motel","Motel, hotel, or short-term lodging"],
-        ["nursing","Nursing home or assisted living"],
+        ["group_home","Group home (small or large)"],
         ["rehab","Rehab or treatment facility"],
         ["medical","Medical clinic or hospital"],
-        ["halfway","Halfway house or transitional housing"],
-        ["shelter","Shelter or emergency housing"],
-        ["none","None of the above / vacant / other"]
+        ["none","None of the above"]
       ];
-      h+=`<p class="q-title">Prior use of this property</p><p class="q-sub">What was this property previously used for? Select all that apply.</p>`;
+      h+=`<p class="q-title">Prior use of this property</p><p class="q-sub">Was this property previously operating as any of the following before March 1, 2023 (LUDC effective date)? Select all that apply.</p>`;
       h+=`<div class="check-row" style="flex-direction:column;gap:6px;">`;
       priorOpts.forEach(([val,label])=>{
         const sel=f.manPriorUses.includes(val);
         h+=`<button class="check-btn ${sel?"sel":""}" onclick="const a=ST.form.manPriorUses;${val==="none"?"ST.form.manPriorUses=['none']":"if(a.includes('none'))ST.form.manPriorUses=[];const i=a.indexOf('"+val+"');if(i>=0)a.splice(i,1);else a.push('"+val+"')"};render()">${label}</button>`;
       });
       h+=`</div>`;
-      h+=`<div class="field-help">This determines whether a legal nonconforming use pathway may be available under § 18.01.7.1. If the property was vacant or had no relevant prior use, select the last option.</div>`;
+      h+=`<div class="field-help">Only prior uses that match a current LUDC use classification are relevant for nonconforming continuation (§ 18.01.7.1). Other prior uses (motel, boarding house, etc.) do not grant nonconforming rights to operate a BH/SUD facility.</div>`;
       h+=`<div class="btn-row">${bk}${f.manPriorUses.length>0?nx:""}</div>`;
     }
     else if(page.id==="manPriorStatus"){
