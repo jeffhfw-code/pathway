@@ -681,7 +681,7 @@ function go(){
    ═══════════════════════════════════════════════════════════════════ */
 function renderRes(){
   const R=ST.results;if(R.error){APP.innerHTML=`<div style="padding:1rem 0;"><div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">${esc(R.error)}</p><p style="font-size:13px;color:#9B9BA7;margin:0;">The intended use is prohibited under the applicable rules. No viable pathway exists, and continuing the analysis is unnecessary because this result is dispositive.</p></div><div class="btn-row" style="margin-top:16px;"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.results=null;ST.pg=0;render()">Back to inputs</button></div></div>`;return}
-  const vi=R.results.filter(r=>r.v==="yes"||r.v==="conditional"),nv=R.results.filter(r=>r.v==="no");
+  const vi=R.results.filter(r=>r.v==="yes"),nv=R.results.filter(r=>r.v==="no");
   let best=0;vi.forEach(r=>{const n=r.mg===999?9999:(r.mg||0);if(n>best)best=n});
   const bL=best===9999?"No UDC cap":best===0?"\u2014":String(best);
   const viCo=vi; // vi already includes conditional (merged per Bug 7)
@@ -772,7 +772,7 @@ function renderRes(){
 }
 
 function pwC(r){
-  const bc=r.v==="no"?"badge-no":r.v==="conditional"?"badge-cond":"badge-yes",bt=r.v==="no"?"Not Viable":r.v==="conditional"?"Conditional":"Viable";
+  const bc=r.v==="no"?"badge-no":"badge-yes",bt=r.v==="no"?"Not Viable":"Viable";
   let ct="";if(r.v!=="no"){if(r.mg===999)ct="no cap";else if(!r.mg)ct="TBD";else ct="up to "+r.mg+" residents"}
   const isO=ST.expanded[r.id]||false;let d="";
   if(r.v!=="no"){
@@ -870,7 +870,7 @@ function getPathwayDocs(r){
 function doSave(){
   if(!ST.results||ST.results.error)return;
   const R=ST.results;
-  const vi=R.results.filter(r=>r.v==="yes"||r.v==="conditional");
+  const vi=R.results.filter(r=>r.v==="yes");
   let best=0;vi.forEach(r=>{const n=r.mg===999?9999:(r.mg||0);if(n>best)best=n});
   const allC=[];vi.forEach(r=>r.cav.forEach(c=>{if(!allC.find(x=>x.msg===c.msg))allC.push(c)}));
   const blk=allC.filter(c=>c.blocking).length;
@@ -936,9 +936,8 @@ function renderComparison(){
   const rows=[
     ["Jurisdiction",r=>({denver:"Denver",cos:"Colorado Springs",epc:"El Paso County",manitou:"Manitou Springs"})[r.analysis.jurisdiction]],
     ["Zone",r=>r.analysis.zone||"\u2014"],
-    ["Viable",r=>{const n=r.results.error?0:r.results.results.filter(x=>x.v==="yes"||x.v==="conditional").length;return`<span style="color:${n>0?"#4ADE80":"#F09595"};font-weight:600;">${n}</span>`}],
-    ["Max beds",r=>{if(r.results.error)return"\u2014";const vi=r.results.results.filter(x=>x.v==="yes"||x.v==="conditional");let best=0;vi.forEach(x=>{const n=x.mg===999?9999:(x.mg||0);if(n>best)best=n});return best===9999?"No cap":best===0?"\u2014":String(best)}],
-    ["Conditional",r=>r.results.error?"\u2014":String(r.results.results.filter(x=>x.v==="conditional").length)],
+    ["Viable",r=>{const n=r.results.error?0:r.results.results.filter(x=>x.v==="yes").length;return`<span style="color:${n>0?"#4ADE80":"#F09595"};font-weight:600;">${n}</span>`}],
+    ["Max beds",r=>{if(r.results.error)return"\u2014";const vi=r.results.results.filter(x=>x.v==="yes");let best=0;vi.forEach(x=>{const n=x.mg===999?9999:(x.mg||0);if(n>best)best=n});return best===9999?"No cap":best===0?"\u2014":String(best)}],
     ["Blockers",r=>{if(r.results.error)return esc(r.results.error);const stops=r.results.gS||[];return stops.length?stops.map(s=>s.msg).join("; "):"None"}]
   ];
   rows.forEach(([label,fn])=>{
@@ -949,7 +948,7 @@ function renderComparison(){
   h+=`<tr><td style="padding:8px;border-bottom:1px solid #1E1E2E;color:#9B9BA7;vertical-align:top;">Viable pathways</td>`;
   results.forEach(r=>{
     if(r.results.error){h+=`<td style="padding:8px;border-bottom:1px solid #1E1E2E;text-align:center;color:#9B9BA7;">\u2014</td>`;return}
-    const vi=r.results.results.filter(x=>x.v==="yes"||x.v==="conditional").map(x=>x.nm);
+    const vi=r.results.results.filter(x=>x.v==="yes").map(x=>x.nm);
     h+=`<td style="padding:8px;border-bottom:1px solid #1E1E2E;text-align:center;color:#E8E8EC;font-size:11px;">${vi.length?vi.join("<br>"):"\u2014"}</td>`;
   });
   h+=`</tr></tbody></table></div>`;

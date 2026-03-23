@@ -146,8 +146,8 @@ test("Licensing=unknown creates blocking caveat",()=>{
   const r=runEngine(baseForm({zone:"S-MX-3",licensing:"unknown"}));
   assertEqual(r.p2,"pass");
   const p1=r.results.find(p=>p.id==="P1");
-  assertEqual(p1.v,"conditional","should be conditional");
-  assert(p1.cav.some(c=>c.msg.includes("Licensing status unknown")),"should have licensing caveat");
+  assertEqual(p1.v,"no","blocking caveat = not viable");
+  assert(p1.stops.some(s=>s.msg.includes("Licensing status unknown")),"should have licensing stop");
 });
 
 test("Correctional in SU blocks Type 1",()=>{
@@ -170,11 +170,11 @@ test("Type 2 lot size check in SU zone",()=>{
   assert(p2.stops[0].msg.includes("12,000"));
 });
 
-test("Type 2 viable with sufficient lot in SU",()=>{
+test("Type 2 blocked by prior-use caveat when unresolved",()=>{
   const r=runEngine(baseForm({zone:"S-SU-Fx",lotSize:15000}));
   const p2=r.results.find(p=>p.id==="P2");
-  // Should be conditional (prior use caveat), not hard-stopped
-  assert(p2.v!=="no","Type 2 should not be hard-stopped with 15k lot");
+  assertEqual(p2.v,"no","blocking caveat = not viable");
+  assert(p2.stops.some(s=>s.msg.includes("Prior use")),"should have prior use stop");
 });
 
 test("Religious assembly exempts Type 1 from ZP",()=>{
@@ -186,7 +186,7 @@ test("Religious assembly exempts Type 1 from ZP",()=>{
 test("MX zone allows all 4 types + existing",()=>{
   const r=runEngine(baseForm({zone:"S-MX-3"}));
   assertEqual(r.results.length,5);
-  const viable=r.results.filter(p=>p.v==="yes"||p.v==="conditional");
+  const viable=r.results.filter(p=>p.v==="yes");
   assert(viable.length>=4,"at least 4 viable in MX zone");
 });
 
@@ -209,10 +209,10 @@ test("Existing conforming use viable when maintained",()=>{
   assertEqual(p5.v,"yes","existing use should be viable");
 });
 
-test("Existing use conditional when maintenance unknown",()=>{
+test("Existing use blocked when maintenance unknown",()=>{
   const r=runEngine(baseForm({zone:"S-SU-Fx",existingRC:"yes",maintained:"unknown"}));
   const p5=r.results.find(p=>p.id==="P5");
-  assertEqual(p5.v,"conditional");
+  assertEqual(p5.v,"no");
 });
 
 test("Existing use blocked when not maintained",()=>{
@@ -649,11 +649,11 @@ test("G-01: on_site_treatment=yes blocks GH-SM",()=>{
   assert(ghSm.stops.some(s=>s.msg.includes("medical or psychological treatment")));
 });
 
-test("G-01: on_site_treatment=unknown creates blocking caveat",()=>{
+test("G-01: on_site_treatment=unknown blocks GH-SM",()=>{
   const r=runManitouEngine(baseForm({zone:"GR",manOnSiteTreatment:"unknown"}));
   const ghSm=r.results.find(p=>p.id==="GH-SM");
-  assertEqual(ghSm.v,"conditional");
-  assert(ghSm.cav.some(c=>c.msg.includes("Classification depends")&&c.blocking));
+  assertEqual(ghSm.v,"no");
+  assert(ghSm.stops.some(s=>s.msg.includes("Classification depends")));
 });
 
 test("G-02: general population triggers blocking caveat",()=>{
@@ -717,11 +717,11 @@ endSuite();
 suite("Manitou — Institutional Pathways");
 
 test("LTC permitted in HDR, blocked in GR",()=>{
-  const r1=runManitouEngine(baseForm({zone:"HDR",manFullTimeNursing:"yes"}));
+  const r1=runManitouEngine(baseForm({zone:"HDR",manFullTimeNursing:"yes",manPopulationType:"elderly"}));
   const ltc1=r1.results.find(p=>p.id==="LTC");
   assertEqual(ltc1.v,"yes");
 
-  const r2=runManitouEngine(baseForm({zone:"GR",manFullTimeNursing:"yes"}));
+  const r2=runManitouEngine(baseForm({zone:"GR",manFullTimeNursing:"yes",manPopulationType:"elderly"}));
   const ltc2=r2.results.find(p=>p.id==="LTC");
   assertEqual(ltc2.v,"no");
   assert(ltc2.stops.some(s=>s.msg.includes("Not permitted")));
@@ -805,7 +805,7 @@ suite("Manitou — Nonconforming Use");
 test("Preexisting + not discontinued = viable",()=>{
   const r=runManitouEngine(baseForm({zone:"GR",manPreexistingUse:"yes",existingRC:"yes",maintained:"yes",manMonthsDiscontinued:0}));
   const nc=r.results.find(p=>p.id==="NC");
-  assert(nc.v==="yes"||nc.v==="conditional","NC should be viable");
+  assertEqual(nc.v,"yes","NC should be viable");
 });
 
 test("G-03: discontinued > 12 months = blocked",()=>{

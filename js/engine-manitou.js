@@ -111,7 +111,7 @@ function runManitouEngine(f){
     const pw={id,nm,th,v:"yes",mg:maxOcc,stops:[],cav:[...gC],proc:perm==="P"?"Permitted (P)":"Conditional Use (C)",rat:"",wf:[],rsk:{},rank:""};
     fn(pw,perm);
     if(pw.stops.length)pw.v="no";
-    else if(pw.cav.some(c=>c.blocking))pw.v="conditional";
+    else if(pw.cav.some(c=>c.blocking)){pw.v="no";pw.cav.filter(c=>c.blocking).forEach(c=>pw.stops.push({msg:c.msg,cite:c.cite}))}
     R.push(pw);
   }
 
@@ -188,6 +188,10 @@ function runManitouEngine(f){
 
   // ──── 3. LONG-TERM CARE FACILITY ────────────────────────────
   tP("LTC","Long-Term Care Facility","Full-time nursing; persons unable to live independently","ltc",999,(pw,perm)=>{
+    // LTC is for persons unable to live independently — not BH/SUD
+    if(pop==="behavioral")pw.cav.push({msg:"LTC is defined as housing for persons 'who are unable to live independently' and require full-time nursing. BH/SUD populations are generally able to live independently and do not fit the LTC definition. Consider Group Home or Medical Care Facility instead.",cite:"§ 18.04.4.2",blocking:true});
+    else if(pop==="general")pw.cav.push({msg:"LTC requires population unable to live independently with full-time nursing. General population does not fit.",cite:"§ 18.04.4.2",blocking:true});
+
     // Requires full-time nursing
     if(nursing==="no")pw.cav.push({msg:"LTC requires full-time nursing assistance for persons who cannot live independently. If nursing is not full-time, consider Group Home Large or Medical Care Facility.",cite:"§ 18.04.4.2",blocking:true,resolve:"Confirm operational model includes full-time nursing."});
     else if(nursing==="unknown")pw.cav.push({msg:"Full-time nursing status unknown — LTC classification requires full-time nursing for persons unable to live independently.",cite:"§ 18.04.4.2",blocking:true,resolve:"Determine nursing staffing model."});
@@ -358,7 +362,7 @@ function runManitouEngine(f){
     if(monthsDisc!=null&&monthsDisc>=12){
       pNC.stops.push({msg:"Use discontinued for "+monthsDisc+" months (≥ 12) — nonconforming status lost. Only conforming uses may resume.",cite:"§ 18.01.7.1(C)"});
     } else if(monthsDisc!=null&&monthsDisc>0&&monthsDisc<12){
-      pNC.v="conditional";
+      pNC.v="yes";
       pNC.cav.push({msg:"Use discontinued for "+monthsDisc+" months — nonconforming status still valid but at risk. 12-month discontinuance terminates status.",cite:"§ 18.01.7.1(C)",blocking:false});
     } else if(monthsDisc==null){
       pNC.cav.push({msg:"Months discontinued unknown — verify that the prior use has not been discontinued for 12+ months.",cite:"§ 18.01.7.1(C)",blocking:true,resolve:"Research continuity with Planning Department records."});
@@ -379,16 +383,18 @@ function runManitouEngine(f){
     pNC.cav.push({msg:"If structure damaged > 50% of GFA, may rebuild to prior dimensions only (no expansion). Building permits within 12 months. Historic District contributing resources must follow Historic District Design Guidelines.",cite:"§ 18.01.7.1(D)–(E)",blocking:false});
 
     if(!pNC.stops.length){
-      pNC.v=pNC.cav.some(c=>c.blocking)?"conditional":"yes";
+      if(pNC.cav.some(c=>c.blocking)){pNC.v="no";pNC.cav.filter(c=>c.blocking).forEach(c=>pNC.stops.push({msg:c.msg,cite:c.cite}))}
+      else pNC.v="yes";
       pNC.rat="Lawfully established use that does not conform to current LUDC. Deemed CUP if CUP would now be required. Use may continue within original scope. No enlargement. 12-month discontinuance terminates status.";
       pNC.rsk={nimby:"Minimal",escalation:"None",timeline:"Immediate",discretion:"None",approval:"Very low",fee:"$0"};
       pNC.rank="Best (if applicable)";
       pNC.wf=[...WF_NC];
     }
   } else if(preexist==="unknown"||exRC==="unknown"){
-    pNC.v="conditional";
+    pNC.v="no";
     pNC.rat="Preexisting use status unknown — requires verification.";
     pNC.cav.push({msg:"Verify whether this use was lawfully established before March 1, 2023 (LUDC effective date, § 18.01.1.2).",cite:"§ 18.01.7.1",blocking:true,resolve:"Research with Planning Department and property records."});
+    pNC.stops.push({msg:"Preexisting use status unknown — cannot confirm nonconforming status.",cite:"§ 18.01.7.1"});
     pNC.rsk={nimby:"Unknown",escalation:"Unknown",timeline:"Pending",discretion:"Unknown",approval:"Unknown"};
     pNC.rank="Investigate";
     pNC.wf=[{t:"Research history with Planning Department"},{t:"Confirm lawfully established status and continuous operation"}];
