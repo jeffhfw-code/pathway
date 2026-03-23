@@ -94,9 +94,7 @@ function getManitouPages(){
   const ut=MAN_UT[z];if(!ut)return p;
   const allN=Object.values(ut).every(v=>v==="N");
   if(allN){p.push({id:"allNP"});return p}
-  p.push({id:"manTreatment"});
-  p.push({id:"manPopulation"});
-  p.push({id:"manOperations"});
+  p.push({id:"manServices"});
   p.push({id:"manConstruction"});
   p.push({id:"existingRC"});
   if(ST.form.existingRC==="yes"){p.push({id:"maintained"});p.push({id:"manPreexisting"})}
@@ -541,31 +539,16 @@ function render(){
       h+=`<div class="btn-row">${bk}${f.zone?nx:""}</div>`;
     }
     else if(page.id==="allNP"){h+=`<div style="background:#2E1010;border:1px solid #5A2020;border-radius:10px;padding:1.5rem;"><p style="font-size:18px;font-weight:600;color:#F09595;margin:0 0 8px;">&#9940; Analysis Stopped — Absolute Prohibition</p><p style="font-size:14px;color:#D87070;margin:0 0 12px;">No behavioral health or residential care uses are permitted in the <strong>${esc(f.zone)}</strong> zone district. Open Space, Parks, and Public Facilities zones do not allow residential or institutional uses.</p><p style="font-size:13px;color:#9B9BA7;margin:0 0 8px;">The intended use is prohibited under the applicable zoning rules. No viable pathway exists in this zone, and continuing the analysis is unnecessary because this result is dispositive.</p><p style="font-size:12px;color:#6B6B78;margin:0;">To proceed, consider: (1) a different property in a permissive zone, or (2) a rezoning application ($1,090).</p></div><div class="btn-row"><button class="btn-primary" onclick="resetState();ST.pg=0;history.replaceState(null,'',location.pathname);render()">New Analysis</button><button class="btn-secondary" onclick="ST.form.zone=null;ST.pg=1;render()">Select different zone</button></div>`}
-    else if(page.id==="manTreatment"){
-      h+=`<p class="q-title">On-site treatment</p><p class="q-sub">Will the facility provide on-site medical treatment for substance use disorders (SUD)?</p>`;
-      h+=`<div class="radio-row">${r3("manOnSiteTreatment",f.manOnSiteTreatment)}</div>`;
-      h+=`<div class="field-help">On-site treatment (e.g. MAT, detox protocols) disqualifies the Group Home — Small classification, routing to larger or institutional pathways. (G-01)</div>`;
-      h+=`<div class="btn-row">${bk}${f.manOnSiteTreatment!==null?nx:""}</div>`;
-    }
-    else if(page.id==="manPopulation"){
-      h+=`<p class="q-title">Population type</p><p class="q-sub">Select the primary population served.</p>`;
-      h+=`<div class="radio-row">`;
-      ["behavioral","elderly","disabled","mixed"].forEach(v=>{
-        const label=v==="behavioral"?"Behavioral health / SUD":v==="elderly"?"Elderly (age 60+)":v==="disabled"?"Persons with disabilities":"Mixed / other";
-        h+=`<button class="radio-btn ${f.manPopulationType===v?"sel":""}" onclick="ST.form.manPopulationType='${v}';render()">${label}</button>`;
-      });
-      h+=`</div>`;
-      h+=`<div class="field-help">Elderly population enables CCRC pathway. FHA-protected populations (elderly, disabled) have reasonable accommodation rights that may relax certain land-use restrictions. (G-02)</div>`;
-      h+=`<div class="btn-row">${bk}${f.manPopulationType?nx:""}</div>`;
-    }
-    else if(page.id==="manOperations"){
-      h+=`<p class="q-title">Operational characteristics</p><p class="q-sub">These details determine which pathways are available.</p>`;
+    else if(page.id==="manServices"){
+      h+=`<p class="q-title">Services &amp; operations</p><p class="q-sub">Answer each question to determine which use classifications apply.</p>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Clinical detox on-site?</label><div class="radio-row">${r2("manClinicalDetox",f.manClinicalDetox)}</div><div class="field-help">Medically supervised withdrawal management (vitals monitoring, IV fluids, withdrawal medications). Blocks Group Home Small; routes to Medical Care Facility.</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">MAT dispensing on-site?</label><div class="radio-row">${r2("manMATDispensing",f.manMATDispensing)}</div><div class="field-help">Facility directly dispenses controlled substances (e.g., methadone at an OTP). Dispensing is a regulated medical act distinct from medication management. Blocks Group Home Small.</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Medication management on-site?</label><div class="radio-row">${r2("manMedManagement",f.manMedManagement)}</div><div class="field-help">Staff stores, reminds, or observes self-administration of medications prescribed elsewhere. This is assistance, not treatment \u2014 does not block Group Home Small.</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">24-hour nursing on-site?</label><div class="radio-row">${r2("manNursing24hr",f.manNursing24hr)}</div><div class="field-help">Full-time nursing staff providing continuous care.</div></div>`;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Other medical/surgical services on-site?</label><div class="radio-row">${r2("manOtherMedical",f.manOtherMedical)}</div><div class="field-help">Diagnosing, treating, or performing medical/surgical procedures on-site (e.g., wound care, injections, diagnostic testing). Blocks Group Home Small.</div></div>`;
       h+=`<div style="margin-bottom:14px;"><label class="field-label">Overnight beds?</label><div class="radio-row">${r2("manOvernightBeds",f.manOvernightBeds)}</div></div>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Provides medical care?</label><div class="radio-row">${r2("manProvidesMedCare",f.manProvidesMedCare)}</div></div>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Provides personal care (bathing, dressing, ADLs)?</label><div class="radio-row">${r2("manProvidesPersonalCare",f.manProvidesPersonalCare)}</div></div>`;
-      h+=`<div style="margin-bottom:14px;"><label class="field-label">Full-time nursing staff?</label><div class="radio-row">${r2("manFullTimeNursing",f.manFullTimeNursing)}</div></div>`;
-      h+=`<div class="field-help">Medical care gates the Medical Care Facility pathway. Personal care gates the Boarding House pathway (excluded if personal care provided). Full-time nursing is required for LTC pathway.</div>`;
-      const allAnswered=f.manOvernightBeds!==null&&f.manProvidesMedCare!==null&&f.manProvidesPersonalCare!==null&&f.manFullTimeNursing!==null;
+      h+=`<div style="margin-bottom:14px;"><label class="field-label">Personal care (bathing, dressing, ADLs)?</label><div class="radio-row">${r2("manProvidesPersonalCare",f.manProvidesPersonalCare)}</div><div class="field-help">Continuous personal care excludes Boarding House classification.</div></div>`;
+      const allAnswered=f.manClinicalDetox!==null&&f.manMATDispensing!==null&&f.manMedManagement!==null&&f.manNursing24hr!==null&&f.manOtherMedical!==null&&f.manOvernightBeds!==null&&f.manProvidesPersonalCare!==null;
       h+=`<div class="btn-row">${bk}${allAnswered?nx:""}</div>`;
     }
     else if(page.id==="manConstruction"){
@@ -629,12 +612,13 @@ function rFacts(){
     if(f.manDwellingUnitSqft!=null){items.push(["Building sqft",f.manDwellingUnitSqft.toLocaleString()+" sf"]);const cap=manTitle15Cap(f.manDwellingUnitSqft);if(cap!==null)items.push(["Title 15 cap",cap+" persons"])}
     if(ST.manAutoYearBuilt)items.push(["Year built",String(ST.manAutoYearBuilt)]);
     if(ST.manAutoBeds)items.push(["Bedrooms",String(ST.manAutoBeds)]);
-    items.push(["On-site treatment",f.manOnSiteTreatment||"\u2014"]);
-    items.push(["Population",f.manPopulationType||"\u2014"]);
+    items.push(["Clinical detox",f.manClinicalDetox||"\u2014"]);
+    items.push(["MAT dispensing",f.manMATDispensing||"\u2014"]);
+    items.push(["Med management",f.manMedManagement||"\u2014"]);
+    items.push(["24hr nursing",f.manNursing24hr||"\u2014"]);
+    items.push(["Other medical/surgical",f.manOtherMedical||"\u2014"]);
     items.push(["Overnight beds",f.manOvernightBeds||"\u2014"]);
-    items.push(["Medical care",f.manProvidesMedCare||"\u2014"]);
     items.push(["Personal care",f.manProvidesPersonalCare||"\u2014"]);
-    items.push(["Full-time nursing",f.manFullTimeNursing||"\u2014"]);
     items.push(["Flood hazard",f.manNaturalHazard==="yes"?"Yes (FEMA)":f.manNaturalHazard==="no"?"No (FEMA)":"Unknown"]);
     items.push(["Historic district",f.manHistoricDistrict==="yes"?"Yes (NPS)":f.manHistoricDistrict==="no"?"No (NPS)":"Unknown"]);
     items.push(["Construction",f.manConstructionScope||"\u2014"]);

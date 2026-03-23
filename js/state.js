@@ -14,8 +14,9 @@ function createDefaultForm(){
     // EPC-specific
     epcSexOffender:null,epcNonprofit:null,epcSeparation:null,epcCadO:null,
     // Manitou Springs-specific
-    manOnSiteTreatment:null,manPopulationType:null,manOvernightBeds:null,
-    manProvidesMedCare:null,manProvidesPersonalCare:null,manFullTimeNursing:null,
+    manClinicalDetox:null,manMATDispensing:null,manMedManagement:null,
+    manNursing24hr:null,manOtherMedical:null,
+    manOvernightBeds:null,manProvidesPersonalCare:null,
     manPreexistingUse:null,manMonthsDiscontinued:null,manProposedExpansion:null,
     manNaturalHazard:null,manHistoricDistrict:null,manConstructionScope:null,
     manDwellingUnitSqft:null
