@@ -6,7 +6,7 @@ input,select,button,textarea{font-family:inherit}
 
 /* ── Layout ───────────────────────────────────────────────────── */
 #app{padding:2rem 1.5rem;max-width:860px;margin:0 auto;padding-left:max(1.5rem,env(safe-area-inset-left));padding-right:max(1.5rem,env(safe-area-inset-right))}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 1.5rem;border-bottom:1px solid #1E1E2E;margin-bottom:0;padding-left:max(1.5rem,env(safe-area-inset-left));padding-right:max(1.5rem,env(safe-area-inset-right))}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 1.5rem;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid #1E1E2E;margin-bottom:0;padding-left:max(1.5rem,env(safe-area-inset-left));padding-right:max(1.5rem,env(safe-area-inset-right))}
 .topbar-brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:14px;letter-spacing:.04em;color:#8AA8D8}
 .topbar-brand svg{width:22px;height:22px}
 .topbar-nav{display:flex;gap:24px}
@@ -182,7 +182,7 @@ a.cite:hover{color:#6EA4E8;text-decoration:underline}
 @media(max-width:480px){
   html{font-size:15px}
   #app{padding:1.25rem 1rem}
-  .topbar{padding:10px 1rem;flex-wrap:wrap;gap:6px}
+  .topbar{padding:10px 1rem;padding-top:max(10px,env(safe-area-inset-top));flex-wrap:wrap;gap:6px}
   .topbar-brand{font-size:13px;gap:8px}
   .topbar-brand svg{width:18px;height:18px}
   .topbar-nav{gap:16px}
